@@ -1,0 +1,2630 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>圃場票メーカー</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@500;700&family=Noto+Sans+JP:wght@400;500;700&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#28352c; --paper:#f1efe3; --paper-dark:#e6e2d0;
+    --moss:#33513f; --moss-dark:#203327; --soil:#8a5a38; --soil-light:#e9dcc9;
+    --line:#c9c2ac; --danger:#a3402f; --muted:#6b7264;
+    --c-manage:#8a5a38; --c-work:#33513f;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;height:100%;}
+  body{font-family:'Noto Sans JP', sans-serif; background:var(--paper); color:var(--ink);}
+  h1,h2,h3{font-family:'Noto Serif JP', serif; margin:0;}
+  #app{display:flex; flex-direction:column; height:100vh;}
+
+  /* ---------- ヘッダー ---------- */
+  header{
+    background:var(--moss); color:var(--paper); padding:8px 14px;
+    display:flex; align-items:center; gap:7px; flex-wrap:wrap;
+    border-bottom:3px solid var(--moss-dark);
+  }
+  header h1{font-size:17px; font-weight:700; letter-spacing:.04em;}
+  header .sub{font-size:11px; opacity:.75; font-family:'IBM Plex Mono', monospace;}
+  header .divider{width:1px; align-self:stretch; background:rgba(255,255,255,.25); margin:0 2px;}
+  header .spacer{flex:1; min-width:8px;}
+  .hide-bar{display:none; align-items:center; gap:6px; flex-wrap:wrap;}
+  .hide-bar.on{display:flex;}
+  .hide-hint{font-size:10.5px; opacity:.8; max-width:230px; line-height:1.3;}
+  .save-state{font-size:11px; font-family:'IBM Plex Mono', monospace; opacity:.85; padding:0 4px; white-space:nowrap;}
+  .save-state.ok{color:#cfe6cf;}
+  .save-state.dirty{color:#f0e3b8;}
+  .save-state.err{color:#ffc9c0;}
+
+  .btn{
+    font-family:'Noto Sans JP', sans-serif; font-size:12.5px; font-weight:500;
+    padding:7px 11px; border-radius:3px; border:1px solid var(--line);
+    background:var(--paper); color:var(--ink); cursor:pointer; white-space:nowrap;
+  }
+  .btn:hover{background:var(--paper-dark);}
+  .btn.primary{background:var(--soil); color:#fff; border-color:var(--soil);}
+  .btn.primary:hover{background:#744a2c;}
+  .btn.ghost{background:transparent; color:var(--paper); border-color:rgba(255,255,255,.5);}
+  .btn.ghost:hover{background:rgba(255,255,255,.12);}
+  .btn.ghost.active{background:var(--soil); border-color:var(--soil); color:#fff;}
+  .btn:disabled{opacity:.35; cursor:not-allowed;}
+  input[type=file]{display:none;}
+
+  /* ---------- ヘッダー内メニュー ---------- */
+  .menu-wrap{position:relative;}
+  .menu{
+    display:none; position:absolute; top:calc(100% + 5px); left:0; z-index:1200;
+    min-width:250px; background:var(--paper); color:var(--ink);
+    border:1px solid var(--line); border-radius:4px; padding:5px 0;
+    box-shadow:0 6px 20px rgba(0,0,0,.28);
+  }
+  .menu.on{display:block;}
+  .menu-item{
+    display:block; width:100%; text-align:left; border:none; background:none;
+    font-family:'Noto Sans JP', sans-serif; font-size:12.5px; color:var(--ink);
+    padding:8px 14px; cursor:pointer; white-space:nowrap;
+  }
+  .menu-item:hover{background:var(--paper-dark);}
+  .menu-item.danger{color:var(--danger);}
+  .menu-item .hint{display:block; font-size:10.5px; color:var(--muted); margin-top:2px;}
+  .menu-sep{height:1px; background:var(--line); margin:5px 0;}
+  .menu-row{display:flex; align-items:center; gap:9px; padding:6px 14px; font-size:12.5px; cursor:pointer;}
+  .menu-row:hover{background:var(--paper-dark);}
+  .menu-row input[type=color]{width:28px; height:24px; padding:0; border:1px solid var(--line); border-radius:3px; background:none; cursor:pointer;}
+
+  /* ---------- 復元バー ---------- */
+  .notice-bar{
+    display:none; align-items:center; gap:10px; flex-wrap:wrap;
+    background:#fff8dc; border-bottom:1px solid var(--line);
+    padding:8px 14px; font-size:12.5px;
+  }
+  .notice-bar.on{display:flex;}
+  .notice-bar .btn{padding:5px 10px; font-size:12px;}
+
+  main{flex:1; display:flex; min-height:0;}
+  .map-wrap{position:relative; flex:1; min-width:0;}
+  #map{position:absolute; inset:0; background:#dcdccf;}
+
+  #logPanel{
+    display:none; position:absolute; right:12px; bottom:12px; width:360px; max-height:240px;
+    overflow-y:auto; background:rgba(255,255,255,.96); border:1px solid var(--line); border-radius:4px;
+    padding:8px 10px; font-family:'IBM Plex Mono', monospace; font-size:11px; z-index:600; color:#333;
+  }
+  #logPanel.on{display:block;}
+  #logPanel .log-line{padding:3px 0; border-bottom:1px dashed var(--line);}
+  #logPanel .log-empty{color:#999;}
+
+  #selectBox{
+    position:absolute; border:2px dashed #e2501f; background:rgba(226,80,31,.15);
+    pointer-events:none; z-index:650; display:none;
+  }
+  .map-wrap.hide-mode .leaflet-container{cursor:crosshair;}
+
+  /* ---------- サイドパネル ---------- */
+  #side{width:352px; background:var(--paper); border-left:2px solid var(--line); display:flex; flex-direction:column; min-height:0;}
+  #side .side-head{padding:11px 14px 9px; border-bottom:1px solid var(--line);}
+  #side .side-head h2{font-size:15px; margin-bottom:5px;}
+  .count-chips{display:flex; gap:6px; align-items:center; flex-wrap:wrap; font-size:11px; font-family:'IBM Plex Mono', monospace;}
+  .count-chips .chip{padding:2px 9px; border-radius:10px; color:#fff;}
+  .count-chips .chip-none{color:var(--muted);}
+
+  .tab-bar{display:flex; flex-wrap:wrap; gap:3px; padding:7px 8px 0; background:var(--paper-dark); border-bottom:1px solid var(--line);}
+  .tab{
+    font-size:11.5px; padding:5px 9px; border:1px solid var(--line); border-bottom:none;
+    border-radius:4px 4px 0 0; background:#e0dcca; color:#5c6459; cursor:pointer;
+    font-family:'Noto Sans JP', sans-serif; display:flex; align-items:center; gap:4px; max-width:150px;
+  }
+  .tab:hover{background:#eae6d6;}
+  .tab.on{background:var(--paper); color:var(--ink); font-weight:700; border-bottom:1px solid var(--paper); margin-bottom:-1px;}
+  .tab .tab-name{overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .tab .tab-n{font-family:'IBM Plex Mono', monospace; opacity:.7; font-size:10.5px;}
+  .tab-add{font-size:11.5px; padding:5px 9px; border:1px dashed var(--line); border-bottom:none; border-radius:4px 4px 0 0; background:transparent; color:var(--muted); cursor:pointer; font-family:'Noto Sans JP', sans-serif;}
+  .tab-add:hover{color:var(--ink); border-color:var(--ink);}
+
+  .side-tools{padding:8px 10px; border-bottom:1px solid var(--line); display:flex; flex-direction:column; gap:9px; background:var(--paper);}
+  .side-tools .row{display:flex; gap:5px;}
+  .tool-group{display:flex; flex-direction:column; gap:5px;}
+  .tool-label{font-size:10.5px; color:var(--muted); letter-spacing:.02em;}
+  .search-input{flex:1; min-width:0; font-size:12px; padding:6px 8px; border:1px solid var(--line); border-radius:3px; background:#fff; font-family:'Noto Sans JP', sans-serif;}
+  .crop-filter{flex-shrink:0; max-width:112px; font-size:12px; padding:6px 4px; border:1px solid var(--line); border-radius:3px; background:#fff; font-family:'Noto Sans JP', sans-serif; color:var(--ink);}
+  .crop-select{flex:1; min-width:0; font-size:11.5px; padding:4px 5px; border:1px solid var(--line); border-radius:3px; background:#f2f6ee; font-family:'Noto Sans JP', sans-serif; color:#41522f;}
+  .mini-btn{flex:1; font-size:11px; padding:5px 4px; border:1px solid var(--line); background:#fff; border-radius:3px; cursor:pointer; white-space:nowrap; font-family:'Noto Sans JP', sans-serif; color:var(--ink);}
+  .mini-btn:hover:not(:disabled){background:var(--paper-dark);}
+  .mini-btn:disabled{opacity:.4; cursor:not-allowed;}
+
+  #list{flex:1; overflow-y:auto; padding:6px; background:var(--paper);}
+  .empty-note{padding:20px 12px; font-size:13px; color:var(--muted); line-height:1.9;}
+  .empty-note .link{color:#3a5a7a; text-decoration:underline; cursor:pointer; background:none; border:none; font:inherit; padding:0;}
+  .card-item{background:#fff; border:1px solid var(--line); border-left:5px solid var(--c-manage); border-radius:3px; padding:7px 9px; margin-bottom:5px;}
+  .card-item:hover{background:#fbfaf5; border-color:#a8a293;}
+  .card-item.type-work{border-left-color:var(--c-work);}
+  .card-item .row1{display:flex; align-items:center; gap:4px;}
+  .card-item .row2{display:flex; align-items:center; gap:5px; margin-top:5px;}
+  .card-item .name-input{font-weight:700; font-size:13.5px; border:1px solid transparent; background:transparent; padding:3px 4px; flex:1; min-width:0; border-radius:2px; font-family:'Noto Sans JP', sans-serif; color:var(--ink);}
+  .card-item .name-input:hover{border-color:var(--line);}
+  .card-item .name-input:focus{outline:none; border-color:var(--ink); background:#fff;}
+  .card-item .m2{flex-shrink:0; font-size:10.5px; font-family:'IBM Plex Mono', monospace; color:var(--muted);}
+  .seg{display:flex; border:1px solid var(--line); border-radius:3px; overflow:hidden; flex-shrink:0;}
+  .seg button{font-size:11.5px; padding:4px 10px; border:none; background:#fff; cursor:pointer; color:var(--muted); font-family:'Noto Sans JP', sans-serif;}
+  .seg button:hover{background:var(--paper-dark);}
+  .seg button.on{color:#fff; font-weight:700;}
+  .group-select{flex:1; min-width:0; font-size:11.5px; padding:4px 5px; border:1px solid var(--line); border-radius:3px; background:#fbfaf5; font-family:'Noto Sans JP', sans-serif; color:#5c6459;}
+  .icon-btn{border:none; background:none; cursor:pointer; font-size:14px; color:#8b8b84; padding:3px 5px; flex-shrink:0; border-radius:3px;}
+  .icon-btn:hover{background:var(--paper-dark); color:var(--ink);}
+  .icon-btn.remove:hover{color:var(--danger);}
+  .icon-btn.jump{font-size:11px; font-family:'Noto Sans JP', sans-serif; border:1px solid var(--line); padding:3px 7px; color:#3a5a7a;}
+  .icon-btn.jump:hover{background:#3a5a7a; color:#fff; border-color:#3a5a7a;}
+  .card-item .note-input{display:none; width:100%; font-size:12px; font-family:'Noto Sans JP', sans-serif; padding:5px 6px; margin-top:5px; border:1px solid var(--line); border-radius:2px; background:#fbfaf5;}
+  .card-item .zone-input{width:100%; font-size:12px; font-family:'Noto Sans JP', sans-serif; padding:5px 6px; margin-top:5px; border:1px solid var(--line); border-radius:2px; background:#fff;}
+  .card-item .zone-input::placeholder, .card-item .note-input::placeholder{color:#a9a493;}
+  .card-item.show-note .note-input{display:block;}
+  .card-item.has-note .icon-btn.memo{color:var(--c-work);}
+  .split-btn{flex-shrink:0; font-size:11px; padding:4px 8px; border:1px solid var(--ink); background:#fff; color:var(--ink); border-radius:3px; cursor:pointer; white-space:nowrap; font-family:'Noto Sans JP', sans-serif;}
+  .split-btn:hover{background:var(--ink); color:var(--paper);}
+  .card-item .pick{width:16px; height:16px; flex-shrink:0; cursor:pointer; accent-color:var(--ink); margin:0 2px 0 0;}
+  .card-item.picked{background:#f4efe0; border-color:var(--ink);}
+  .card-item.is-unit{border-left-width:5px; background:#fdfcf7; box-shadow:inset 3px 0 0 rgba(0,0,0,.06);}
+  .unit-badge{flex-shrink:0; font-size:10.5px; font-family:'IBM Plex Mono', monospace; background:var(--ink); color:var(--paper); padding:3px 7px; border-radius:9px; border:none; cursor:pointer;}
+  .unit-badge:hover{background:var(--moss);}
+  .member-list{display:none; margin-top:7px; padding-top:6px; border-top:1px dashed var(--line);}
+  .card-item.open .member-list{display:block;}
+  .member-hint{font-size:10.5px; color:var(--muted); margin-bottom:5px;}
+  .member-row{display:flex; align-items:center; gap:5px; margin-bottom:4px;}
+  .member-row .m-name{flex:1; min-width:0; font-size:12px; padding:4px 6px; border:1px solid var(--line); border-radius:2px; background:#fff; font-family:'Noto Sans JP', sans-serif; color:var(--ink);}
+  .member-row .m-name::placeholder{color:#a9a493;}
+  .member-row .m-off{flex-shrink:0; font-size:10.5px; padding:4px 8px; border:1px solid var(--line); background:#fff; border-radius:3px; cursor:pointer; color:var(--muted); font-family:'Noto Sans JP', sans-serif;}
+  .member-row .m-off:hover{color:var(--danger); border-color:var(--danger);}
+  #side .side-foot{padding:10px 14px; border-top:1px solid var(--line);}
+  #side .side-foot .btn{width:100%; padding:10px; font-size:13.5px;}
+  .foot-hint{font-size:10.5px; color:var(--muted); margin-top:6px; line-height:1.5; text-align:center;}
+
+  .leaflet-popup-content{font-family:'Noto Sans JP', sans-serif; font-size:12px;}
+  .leaflet-tooltip.chiban-label{
+    background:rgba(255,255,255,.88); border:none; box-shadow:none;
+    padding:1px 5px; font-size:11px; color:#222; font-family:'IBM Plex Mono', monospace;
+  }
+  .leaflet-tooltip.chiban-label::before{display:none;}
+
+  /* ---------- トースト ---------- */
+  #toasts{position:fixed; left:50%; bottom:26px; transform:translateX(-50%); z-index:2000; display:flex; flex-direction:column; gap:7px; align-items:center; pointer-events:none;}
+  .toast{
+    background:rgba(32,51,39,.95); color:#f1efe3; font-size:12.5px; padding:9px 16px;
+    border-radius:20px; box-shadow:0 4px 14px rgba(0,0,0,.25); max-width:80vw;
+    transition:opacity .35s, transform .35s;
+  }
+  .toast.err{background:rgba(140,45,32,.96);}
+  .toast.out{opacity:0; transform:translateY(8px);}
+
+  /* ---------- 進行中オーバーレイ ---------- */
+  #busy{display:none; position:fixed; inset:0; background:rgba(40,53,44,.55); z-index:1800; align-items:center; justify-content:center;}
+  #busy.on{display:flex;}
+  .busy-box{background:var(--paper); border-radius:6px; padding:22px 28px; min-width:290px; text-align:center; box-shadow:0 10px 34px rgba(0,0,0,.3);}
+  .busy-box h3{font-size:15px; margin-bottom:6px;}
+  .busy-box .num{font-size:11px; color:var(--muted); font-family:'IBM Plex Mono', monospace;}
+  .busy-bar{height:7px; background:var(--paper-dark); border-radius:4px; overflow:hidden; margin:11px 0 7px;}
+  .busy-bar span{display:block; height:100%; width:0; background:var(--moss); transition:width .2s;}
+
+  /* ---------- 使い方モーダル ---------- */
+  #helpModal, #importModal{display:none; position:fixed; inset:0; background:rgba(40,53,44,.6); z-index:1900; align-items:center; justify-content:center; padding:20px;}
+  #helpModal.on, #importModal.on{display:flex;}
+  .imp-row{display:flex; gap:7px; margin:10px 0;}
+  .imp-row input{flex:1; min-width:0; font-family:'Noto Sans JP', sans-serif; font-size:13px; padding:8px 10px; border:1px solid var(--line); border-radius:3px; background:#fff; color:var(--ink);}
+  .imp-check{display:block; font-size:12.5px; margin:4px 0;}
+  .imp-status{display:none; font-size:12.5px; margin:12px 0; padding:10px 13px; border-radius:4px; background:#fff; border:1px solid var(--line); line-height:1.75;}
+  .imp-status.on{display:block;}
+  .imp-status.err{border-color:var(--danger); color:var(--danger);}
+  .imp-status.busy{border-color:var(--moss); color:var(--moss);}
+  .imp-cmd{background:#2b3830; color:#e8e4d4; border-radius:3px; padding:10px 13px; font-family:'IBM Plex Mono', monospace; font-size:12px; overflow-x:auto; margin:8px 0;}
+  .imp-note{font-size:11.5px; color:var(--muted); line-height:1.75;}
+  .help-box{background:var(--paper); border-radius:6px; max-width:620px; width:100%; max-height:88vh; overflow-y:auto; padding:22px 26px; box-shadow:0 10px 34px rgba(0,0,0,.3);}
+  .help-box h2{font-size:19px; margin-bottom:4px;}
+  .help-box h3{font-size:13.5px; margin:18px 0 6px; color:var(--moss); border-bottom:1px solid var(--line); padding-bottom:3px;}
+  .help-box p, .help-box li{font-size:12.5px; line-height:1.85;}
+  .help-box ol, .help-box ul{margin:0; padding-left:1.4em;}
+  .help-box .kbd{font-family:'IBM Plex Mono', monospace; background:#fff; border:1px solid var(--line); border-radius:3px; padding:1px 6px; font-size:11.5px;}
+  .help-box .term{background:#fff; border:1px solid var(--line); border-radius:4px; padding:9px 12px; margin:7px 0; font-size:12.5px; line-height:1.7;}
+  .help-box .term b{color:var(--moss);}
+  .help-foot{margin-top:20px; display:flex; justify-content:flex-end;}
+
+  #fatal{display:none; padding:26px; margin:24px; background:#fff; border:2px solid var(--danger); border-radius:6px; font-size:14px; line-height:1.9;}
+  #fatal.on{display:block;}
+
+  /* 印刷用の下書き。画面外に置くことで、印刷前に地図画像を確実に読み込ませる。 */
+  #printArea{position:absolute; left:-100000px; top:0; width:190mm; height:0; overflow:hidden;}
+
+  @media (max-width:900px){
+    main{flex-direction:column;}
+    #side{width:100%; border-left:none; border-top:2px solid var(--line); height:52%;}
+    .map-wrap{flex:1; min-height:240px;}
+  }
+
+  @media print{
+    @page{size:A4 portrait; margin:10mm;}
+    body>*{display:none !important;}
+    body>#printArea{display:block !important; position:static; left:auto; width:auto; height:auto; overflow:visible;}
+    .sheet{width:100%; page-break-after:always; break-after:page; font-family:'Noto Sans JP', sans-serif; color:#111;}
+    .sheet:last-child{page-break-after:auto; break-after:auto;}
+    .sheet-head{display:flex; justify-content:space-between; align-items:flex-start; gap:16px; margin-bottom:8px;}
+    .sheet-head-main{flex:1; min-width:0;}
+    .sheet-badge{display:inline-block; font-family:'Noto Serif JP', serif; font-weight:700; font-size:20px; padding:5px 16px; border:3px solid #111; border-radius:4px; margin-bottom:8px;}
+    .sheet h2{font-size:24px; font-family:'Noto Serif JP', serif; margin-bottom:2px;}
+    .info-block{margin:6px 0 0;}
+    .info-line{font-size:18pt; font-family:'Noto Sans JP', sans-serif; color:#181818; margin:5px 0; line-height:1.35;}
+    .info-label{display:inline-block; min-width:2.4em; color:#666; font-size:14pt; font-family:'IBM Plex Mono', monospace; margin-right:10px; vertical-align:baseline;}
+    .sheet .note{font-size:18pt; margin:6px 0 10px; color:#181818; text-decoration:underline; text-underline-offset:5px; line-height:1.5;}
+    .crop-line{font-size:14pt; color:#2c4a1e; margin:2px 0 6px; font-weight:700;}
+    .sheet-grid{display:grid; grid-template-columns:1fr 1fr; gap:6px 10px; justify-items:center; page-break-inside:avoid; break-inside:avoid;}
+    .mini-col{text-align:center;}
+    .mini-frame{overflow:hidden; position:relative; border:1px solid #999; display:inline-block;}
+    .mini-inner{width:768px; height:768px; position:relative; transform-origin:0 0;}
+    .mini-cap{font-size:10px; color:#777; margin-top:3px; font-family:'IBM Plex Mono', monospace;}
+    .sheet-qr{flex-shrink:0;}
+    .sheet-qr img, .sheet-qr canvas{border:1px solid #ccc; padding:5px;}
+    .sheet-footer{margin-top:14px; font-size:10.5px; color:#888; border-top:1px solid #ccc; padding-top:5px; font-family:'IBM Plex Mono', monospace; display:flex; justify-content:space-between;}
+    .gsi-credit{font-size:9.5px; color:#999; margin-top:4px;}
+    .print-hint{padding:40px; font-size:16px; line-height:2;}
+  }
+</style>
+</head>
+<body>
+<div id="fatal">
+  <strong>地図ライブラリ（Leaflet）を読み込めませんでした。</strong><br>
+  このツールは地図の表示にインターネット接続が必要です。接続を確認して、ページを再読み込みしてください。
+</div>
+
+<div id="app">
+  <header>
+    <h1>圃場票メーカー</h1>
+    <span class="sub">GeoJSON（ピン・ポリゴン対応）</span>
+    <div class="divider"></div>
+
+    <label class="btn ghost" for="fileInput">ファイルを開く</label>
+    <input type="file" id="fileInput" accept=".geojson,.json" multiple>
+    <button class="btn ghost" id="importBtn" title="表示中の範囲の筆ポリゴンを、登録不要で直接取り込めます">農地データを取り込む</button>
+
+    <div class="menu-wrap">
+      <button class="btn ghost" data-menu="dataMenu" id="dataMenuBtn">保存・書き出し ▾</button>
+      <div class="menu" id="dataMenu">
+        <button class="menu-item" id="saveBtn">ブラウザに保存<span class="hint">この端末のブラウザに上書き保存します</span></button>
+        <button class="menu-item" id="loadSavedBtn">保存データを読み込む</button>
+        <div class="menu-sep"></div>
+        <button class="menu-item" id="exportBtn">JSONファイルに保存<span class="hint">表示中の圃場のみ。別の端末への引き継ぎ用</span></button>
+        <button class="menu-item" id="csvBtn">CSVファイルに書き出す<span class="hint">一覧・面積の集計用（Excelで開けます）</span></button>
+        <div class="menu-sep"></div>
+        <button class="menu-item danger" id="resetAllBtn">すべて消去</button>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+    <button class="btn ghost" id="undoBtn" disabled title="元に戻す (Ctrl+Z)">↶ 元に戻す</button>
+    <button class="btn ghost" id="redoBtn" disabled title="やり直す (Ctrl+Shift+Z)">↷ やり直す</button>
+
+    <div class="divider"></div>
+    <button class="btn ghost" id="hideModeBtn" title="使わない区画をまとめて地図から消します">非表示モード</button>
+    <span class="hide-bar" id="hideBar">
+      <span class="hide-hint">クリック=選ぶ／Shift+ドラッグ=囲んで選ぶ／ドラッグ=地図移動</span>
+      <span class="sub" id="pendingCountLabel">0件</span>
+      <button class="btn ghost" id="confirmHideBtn">非表示にする (Backspace)</button>
+      <button class="btn ghost" id="cancelHideBtn">終了 (Esc)</button>
+    </span>
+    <button class="btn ghost" id="showHiddenBtn" disabled>すべて再表示</button>
+    <button class="btn ghost" id="isolateBtn" disabled title="リストに入れた圃場だけを残し、それ以外を非表示にします">選択以外を非表示</button>
+
+    <div class="divider"></div>
+    <div class="menu-wrap">
+      <button class="btn ghost" data-menu="viewMenu">表示 ▾</button>
+      <div class="menu" id="viewMenu">
+        <button class="menu-item" id="chibanBtn">地番ラベル: ON</button>
+        <div class="menu-sep"></div>
+        <label class="menu-row"><input type="color" id="manageColorInput" value="#8a5a38"><span>管理農地の色</span></label>
+        <label class="menu-row"><input type="color" id="workColorInput" value="#33513f"><span>作業農地の色</span></label>
+      </div>
+    </div>
+
+    <div class="spacer"></div>
+    <span class="save-state" id="saveState">未保存</span>
+    <button class="btn ghost" id="helpBtn" title="使い方 (F1)">？ 使い方</button>
+    <button class="btn ghost" id="logBtn">ログ</button>
+  </header>
+
+  <div class="notice-bar" id="restoreBar">
+    <span id="restoreInfo"></span>
+    <button class="btn" id="restoreYes">読み込む</button>
+    <button class="btn" id="restoreNo">閉じる</button>
+  </div>
+
+  <main>
+    <div class="map-wrap" id="mapWrap">
+      <div id="map"></div>
+      <div id="selectBox"></div>
+      <div id="logPanel"><div class="log-empty">まだログはありません。</div></div>
+    </div>
+    <div id="side">
+      <div class="side-head">
+        <h2>圃場票リスト</h2>
+        <div class="count-chips" id="countChips"><span class="chip-none">まだ選んでいません</span></div>
+      </div>
+      <div class="tab-bar" id="tabBar"></div>
+      <div class="side-tools">
+        <div class="row">
+          <input type="text" id="searchInput" class="search-input" placeholder="名前・地番・メモでしぼり込み">
+          <select id="cropFilter" class="crop-filter" title="作物でしぼり込み"><option value="">全作物</option></select>
+        </div>
+        <div class="tool-group">
+          <div class="tool-label">リストに追加・解除</div>
+          <div class="row">
+            <button class="mini-btn" id="selectAllBtn">表示中の区画を全部追加</button>
+            <button class="mini-btn" id="clearBtn">リストを空にする</button>
+          </div>
+        </div>
+        <div class="tool-group">
+          <div class="tool-label">チェック □ ＝ 印刷・まとめの対象をしぼる</div>
+          <div class="row">
+            <button class="mini-btn" id="checkAllBtn">表示中を全チェック</button>
+            <button class="mini-btn" id="uncheckBtn" disabled>チェックを外す</button>
+          </div>
+          <div class="row">
+            <button class="mini-btn" id="mergeBtn" disabled>まとめる（2件以上チェック）</button>
+          </div>
+        </div>
+        <div class="tool-group">
+          <div class="tool-label">表示中をまとめて変更</div>
+          <div class="row">
+            <button class="mini-btn" id="allWorkBtn">作業にする</button>
+            <button class="mini-btn" id="allManageBtn">管理にする</button>
+          </div>
+        </div>
+      </div>
+      <div id="list">
+        <div class="empty-note">地図をクリックして圃場を選んでください。<br>選んだ圃場が1枚ずつの圃場票になります。<br><button class="link" id="emptyHelpBtn">→ 使い方を見る</button></div>
+      </div>
+      <div class="side-foot">
+        <button class="btn primary" id="printBtn" disabled>印刷する</button>
+        <div class="foot-hint" id="footHint"></div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<div id="busy">
+  <div class="busy-box">
+    <h3 id="busyTitle">印刷の準備をしています</h3>
+    <div class="busy-bar"><span id="busyBar"></span></div>
+    <div class="num" id="busyNum"></div>
+  </div>
+</div>
+
+<div id="helpModal">
+  <div class="help-box">
+    <h2>圃場票メーカーの使い方</h2>
+    <p style="color:var(--muted); font-size:12px;">農地のGeoJSONを読み込んで、1圃場につき1枚のA4圃場票を印刷するツールです。</p>
+
+    <h3>基本の流れ</h3>
+    <ol>
+      <li>農地のデータを読み込みます。<b>農地データを取り込む</b>を押して、地図に見えている範囲の筆ポリゴンをそのまま取得（登録も準備も不要）。地番や住所も入れたい場合は、eMAFF農地ナビのピンJSONを<b>ファイルを開く</b>で重ねて読み込むと自動で照合されます（ポリゴン・ピンどちらでも、複数まとめてでも可）。</li>
+      <li>地図で区画を<b>クリック</b>すると、右のリストに入ります。これが圃場票1枚になります。</li>
+      <li>リストで<b>名前・作業/管理・フォルダ・作物・地域グループ・メモ</b>を入れます。</li>
+      <li><b>印刷する</b>を押すと、航空写真と道路地図・QRコード付きの圃場票が出ます。</li>
+    </ol>
+
+    <h3>まちがえやすい2つの言葉</h3>
+    <div class="term"><b>選択</b>（地図をクリック）… 圃場票を<b>作る</b>操作です。選ぶとリストに追加され、色が付きます。</div>
+    <div class="term"><b>チェック □</b>（リストの四角）… 圃場票を作る操作では<b>ありません</b>。「まとめる」対象を選ぶときと、印刷を<b>その分だけに絞りたい</b>ときに使います。1つもチェックしていなければ、いま表示されている全部が印刷されます。</div>
+
+    <h3>複数の筆を1枚の票にする（まとめ）</h3>
+    <p><b>地図で Ctrl キーを押しながらクリック</b>していくのが一番早いです。1回目で起点（黄色の破線で囲まれます）、2回目以降のCtrl+クリックで同じ圃場にまとまっていきます。まとめから外したい筆は、もう一度Ctrl+クリック。<span class="kbd">Esc</span>でまとめ操作を終わります。MacはCommandキーです。</p>
+    <p>一覧側から作る場合は、対象を<b>チェック</b>して「まとめる」を押します。どちらの方法でも、1枚の票に<b>地番が重複なしで番地順に連記</b>され、面積は合計されます。元に戻すときは「まとめ解除」です。</p>
+    <p>名前は<b>まとめたあとで</b>入れられます。まとめてできたカードの名前欄に入力するだけです。カード左の<b>「3筆」バッジを押すと中身が開き</b>、入っている筆の名前をそれぞれ直したり、1筆だけ「外す」こともできます。</p>
+
+    <h3>フォルダ・しぼり込み</h3>
+    <p>タブの「＋ フォルダ」で分類を作れます（タブをダブルクリックで名前変更・削除）。しぼり込み中は<b>印刷もしぼり込んだ分だけ</b>になります。印刷ボタンに枚数が出るので確認してください。</p>
+
+    <h3>保存について</h3>
+    <p>操作するたびに<b>自動でこのブラウザに保存</b>されます（ヘッダー右に保存時刻が出ます）。別の端末へ移すときや控えを残すときは「保存・書き出し」から<b>JSONファイル</b>に保存してください。一覧を表計算で使いたいときは<b>CSV</b>です。</p>
+
+    <h3>ショートカット</h3>
+    <ul>
+      <li><span class="kbd">Ctrl</span>+<span class="kbd">Z</span> 元に戻す / <span class="kbd">Ctrl</span>+<span class="kbd">Shift</span>+<span class="kbd">Z</span> やり直す</li>
+      <li><span class="kbd">Ctrl</span>+<span class="kbd">P</span> 印刷（準備してから印刷画面が出ます）</li>
+      <li>非表示モード中: <span class="kbd">Backspace</span> 確定 / <span class="kbd">Esc</span> 終了</li>
+      <li><span class="kbd">F1</span> この画面</li>
+    </ul>
+
+    <h3>ご注意</h3>
+    <p>地図の画像と地図ライブラリはインターネットから読み込むため、<b>オンライン環境が必要</b>です。印刷したい圃場票は、電波の届く場所で先に印刷（またはPDF保存）しておいてください。</p>
+
+    <div class="help-foot"><button class="btn primary" id="helpClose">閉じる</button></div>
+  </div>
+</div>
+
+<div id="importModal">
+  <div class="help-box">
+    <h2>農地データを取り込む</h2>
+
+    <p>農林水産省「筆ポリゴン公開サイト」の地図サービスから、<b>いま画面に見えている範囲</b>の区画をそのまま取り込みます。取り込みたい場所まで地図を動かして拡大してから押してください。</p>
+    <div class="imp-row">
+      <input type="text" id="impLgCode" value="392103" maxlength="6" inputmode="numeric" placeholder="市町村コード6桁">
+      <button class="btn primary" id="impFudeRun">表示範囲を取り込む</button>
+    </div>
+    <label class="imp-check"><input type="checkbox" id="impUseCode" checked> この市町村コードの区画だけに絞る（四万十市=392103／高知市=392014）</label>
+    <div class="imp-status" id="impStatus"></div>
+    <p class="imp-note">
+      このデータには<b>地番と住所は入りません</b>（区画の形と筆ポリゴンIDのみ）。地番を入れたい場合は、いま使っているeMAFF農地ナビのピンJSONを「ファイルを開く」で重ねて読み込んでください。自動で照合して地番が入ります。
+    </p>
+
+    <div class="help-foot"><button class="btn" id="importClose">閉じる</button></div>
+  </div>
+</div>
+
+<div id="toasts"></div>
+<div id="printArea"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script>
+(function(){
+  'use strict';
+  const el = id => document.getElementById(id);
+
+  if(typeof L === 'undefined'){
+    el('fatal').classList.add('on');
+    el('app').style.display = 'none';
+    return;
+  }
+
+  // ---------- 定数 ----------
+  const AERIAL_TILE = 'https://cyberjapandata.gsi.go.jp/xyz/seamlessphoto/{z}/{x}/{y}.jpg';
+  const ROAD_TILE   = 'https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png';
+  const STORE_KEY   = 'farmlandProjectAutoSave';
+  const HELP_KEY    = 'farmlandHelpSeen';
+  const ADDR_KEYS   = ['Address','所在','所在地','住所'];
+  const CHIBAN_KEYS = ['Tiban','地番','地番号'];
+  const SVG_NS      = 'http://www.w3.org/2000/svg';
+  const MINI_SIZE   = 300;   // 印刷ミニ地図の一辺(px)
+  const MINI_BOX    = 768;   // ミニ地図の内部解像度(px)
+
+  // 農林水産省「筆ポリゴン公開サイト」の地図サービス（登録不要・CORS許可あり）。
+  // 公開年度が変わるとサービス名が変わるため、動かなくなったらここを差し替える。
+  const FUDE_QUERY  = 'https://services8.arcgis.com/cW9ZoPyzxXOxrpu1/arcgis/rest/services/FudePolygonTemp_2026/FeatureServer/0/query';
+  const FUDE_FIELDS = 'polygon_uuid,land_type,issue_year,edit_year,local_government_cd,point_lat,point_lng';
+  const FUDE_MAX      = 15000;   // 一度に取り込む区画数の上限
+  const FUDE_MAX_REQ  = 80;      // 通信回数の上限（範囲が広すぎるときの歯止め）
+  const FUDE_MIN_ZOOM = 13;      // これより引いた状態では取り込ませない
+  const DEFAULT_VIEW  = {center:[32.9905, 132.9376], zoom:13};   // 四万十市（中村）
+
+  const map = L.map('map', {zoomControl:true}).setView(DEFAULT_VIEW.center, DEFAULT_VIEW.zoom);
+  L.tileLayer(AERIAL_TILE, {
+    maxZoom: 20, maxNativeZoom: 18, attribution: '地図: 国土地理院（全国最新写真）'
+  }).addTo(map);
+
+  // ---------- 読み込んだ生データ（ファイルを追加しても失われない） ----------
+  let rawPolygons = [];   // {id, name, autoName, props, kind:'polygon', latlngs, point:null, _matchedPinId?}
+  let rawPins = [];       // {id, name, autoName, props, kind:'point', latlngs:null, point}
+  let keyToId = new Map();
+  let loadCounter = 0;
+
+  // ---------- 画面の状態 ----------
+  let parcels = [];              // いま地図に出している区画
+  let byId = new Map();          // id -> parcel（毎回findしないための索引）
+  let selected = new Map();      // id -> {type, note, zone, crop, group}
+  let hidden = new Set();
+  let pendingHide = new Set();
+  let hideMode = false;
+  let showChibanLabels = true;
+  let manageColor = '#8a5a38';
+  let workColor = '#33513f';
+  let undoStack = [];
+  let redoStack = [];
+  let isolateHiddenIds = null;
+  let groups = [];               // [{id, name}]
+  let activeTab = 'all';         // 'all' | 'none' | groupId
+  let groupSeq = 1;
+  let units = [];                // [{id, name, memberIds, type, note, zone, crop, group}]
+  let unitByMember = new Map();  // memberId -> unit
+  let unitSeq = 1;
+  let checkedIds = new Set();
+  let expandedUnits = new Set();   // 中身の筆を開いて表示しているまとめ
+  let cropList = [];
+  let autosaveTimer = null;
+  let layerGroup = L.layerGroup().addTo(map);
+
+  // ================================================================
+  //  小さな道具
+  // ================================================================
+  function escapeHtml(s){
+    return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+  function logMsg(text){
+    const time = new Date().toLocaleTimeString('ja-JP', {hour12:false});
+    const panel = el('logPanel');
+    const empty = panel.querySelector('.log-empty');
+    if(empty) empty.remove();
+    const line = document.createElement('div');
+    line.className = 'log-line';
+    line.textContent = '[' + time + '] ' + text;
+    panel.prepend(line);
+  }
+  function toast(msg, kind){
+    const d = document.createElement('div');
+    d.className = 'toast' + (kind ? ' ' + kind : '');
+    d.textContent = msg;
+    el('toasts').appendChild(d);
+    setTimeout(() => { d.classList.add('out'); setTimeout(() => d.remove(), 400); }, 3400);
+    logMsg(msg);
+  }
+  function download(blob, name){
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  }
+  function today(){ return new Date().toISOString().slice(0,10); }
+
+  function extractAddress(props){
+    for(const k of ADDR_KEYS){ if(props && props[k]) return {key:k, value:props[k]}; }
+    return null;
+  }
+  function extractChiban(props){
+    for(const k of CHIBAN_KEYS){ if(props && props[k]) return {key:k, value:props[k]}; }
+    return null;
+  }
+  function labelText(p){
+    const c = extractChiban(p.props);
+    return c ? String(c.value) : p.name;
+  }
+  function hasChiban(p){ return !!extractChiban(p.props); }
+
+  // まとめた圃場の地番を並べる。重複は取り除き、番地の数字順に並べる（101-2 の次が 102 になるように）。
+  function chibanListOf(members){
+    const seen = new Set();
+    members.forEach(m => {
+      const c = extractChiban(m && m.props);
+      const v = c && c.value != null ? String(c.value).trim() : '';
+      if(v) seen.add(v);
+    });
+    return Array.from(seen).sort((a, b) => a.localeCompare(b, 'ja', {numeric:true}));
+  }
+
+  // ---------- 面積（測地系を考慮した近似。単位はm²） ----------
+  function geodesicArea(ring){
+    const R = 6378137, d2r = Math.PI / 180;
+    let a = 0;
+    for(let i=0, j=ring.length-1; i<ring.length; j=i++){
+      const p1 = ring[i], p2 = ring[j];
+      a += (p2[1]-p1[1]) * d2r * (2 + Math.sin(p1[0]*d2r) + Math.sin(p2[0]*d2r));
+    }
+    return Math.abs(a * R * R / 2);
+  }
+  function parcelArea(p){
+    if(!p || p.kind !== 'polygon' || !p.latlngs || p.latlngs.length < 3) return 0;
+    if(p._area == null) p._area = geodesicArea(p.latlngs);
+    return p._area;
+  }
+  function itemArea(it){ return it.members.reduce((s, p) => s + parcelArea(p), 0); }
+  function fmtAreaShort(m2){
+    if(!m2) return '';
+    const a = m2 / 100;
+    return (a >= 10 ? a.toFixed(1) : a.toFixed(2)) + 'a';
+  }
+  function fmtAreaFull(m2){
+    if(!m2) return '';
+    return fmtAreaShort(m2) + '（' + Math.round(m2).toLocaleString('ja-JP') + '㎡）';
+  }
+
+  // ================================================================
+  //  GeoJSON の読み込み
+  // ================================================================
+  function parseGeoJSON(obj){
+    const feats = obj.type === 'FeatureCollection' ? obj.features : [obj];
+    return (feats || []).map((f, i) => featureFromGeoJSON(f, i)).filter(Boolean);
+  }
+  function featureFromGeoJSON(f, i){
+    const props = (f && f.properties) || {};
+    const geom = (f && f.geometry) || {};
+    let kind = null, rings = null, point = null;
+    if(geom.type === 'Polygon'){
+      kind = 'polygon';
+      rings = geom.coordinates[0].map(c => [c[1], c[0]]);
+    } else if(geom.type === 'MultiPolygon'){
+      kind = 'polygon';
+      rings = geom.coordinates[0][0].map(c => [c[1], c[0]]);
+      if(geom.coordinates.length > 1) logMsg('注意: MultiPolygonの一部パートは表示されません（' + pickName(props) + '）');
+    } else if(geom.type === 'Point'){
+      kind = 'point';
+      point = [geom.coordinates[1], geom.coordinates[0]];
+    } else {
+      return null;
+    }
+    const nm = pickName(props);
+    return {id:null, name:nm, autoName:nm, props, kind, latlngs:rings, point, _autoName:true};
+  }
+  // 地番などが無いデータは名前を空欄にする（「区画 #12」のような仮の名前は、
+  // まとめたときに消す手間が増えるだけなので付けない）
+  function pickName(props){
+    const keys = ['Tiban','地番','地番号','name','名称','ID','id','FID','筆ID'];
+    for(const k of keys){ if(props[k]) return String(props[k]); }
+    return '';
+  }
+
+  // 同じ区画が複数ファイルに含まれても二重登録しないための識別キー
+  function dedupeKey(f){
+    const pr = f.props || {};
+    if(f.kind === 'polygon'){
+      if(pr.polygon_uuid) return 'poly:' + pr.polygon_uuid;
+      if(f.latlngs && f.latlngs.length){
+        const a = f.latlngs[0], b = f.latlngs[Math.floor(f.latlngs.length/2)];
+        return 'poly:' + f.latlngs.length + ':' + a[0].toFixed(7) + ',' + a[1].toFixed(7) + ':' + b[0].toFixed(7) + ',' + b[1].toFixed(7);
+      }
+      return null;
+    }
+    if(pr.DaichoId) return 'pin:' + pr.DaichoId;
+    if(f.point) return 'pin:' + f.point[0].toFixed(7) + ',' + f.point[1].toFixed(7) + ':' + (pr.Tiban || '');
+    return null;
+  }
+  function ingestFeature(f){
+    const key = dedupeKey(f);
+    if(key && keyToId.has(key)) return {id: keyToId.get(key), isNew: false};
+    f.id = 'p' + (loadCounter++);
+    if(f.autoName == null) f.autoName = f.name;
+    if(key) keyToId.set(key, f.id);
+    if(f.kind === 'polygon') rawPolygons.push(f); else rawPins.push(f);
+    return {id: f.id, isNew: true};
+  }
+
+  // ---------- ピンの地番をポリゴンへ移す（点が中に入っているか判定） ----------
+  function pointInRing(point, ring){
+    const [plat, plon] = point;
+    let inside = false;
+    for(let i=0, j=ring.length-1; i<ring.length; j=i++){
+      const [yi, xi] = ring[i], [yj, xj] = ring[j];
+      const intersect = ((yi > plat) !== (yj > plat)) && (plon < (xj - xi) * (plat - yi) / (yj - yi) + xi);
+      if(intersect) inside = !inside;
+    }
+    return inside;
+  }
+  function bboxOf(ring){
+    let minLat=Infinity, maxLat=-Infinity, minLon=Infinity, maxLon=-Infinity;
+    for(const [lat,lon] of ring){
+      if(lat<minLat)minLat=lat; if(lat>maxLat)maxLat=lat;
+      if(lon<minLon)minLon=lon; if(lon>maxLon)maxLon=lon;
+    }
+    return {minLat,maxLat,minLon,maxLon};
+  }
+  function runMatching(){
+    const usedPinIds = new Set(rawPolygons.filter(p => p._matchedPinId).map(p => p._matchedPinId));
+    let newlyMatched = 0;
+    rawPolygons.forEach(poly => {
+      if(poly._matchedPinId) return;
+      if(hasChiban(poly)) return;
+      if(!poly.latlngs || poly.latlngs.length < 3) return;
+      if(!poly._bbox) poly._bbox = bboxOf(poly.latlngs);
+      const b = poly._bbox;
+      const match = rawPins.find(pin =>
+        !usedPinIds.has(pin.id) &&
+        pin.point[0] >= b.minLat && pin.point[0] <= b.maxLat &&
+        pin.point[1] >= b.minLon && pin.point[1] <= b.maxLon &&
+        pointInRing(pin.point, poly.latlngs));
+      if(match){
+        poly.props = Object.assign({}, match.props, poly.props);
+        poly._matchedPinId = match.id;
+        usedPinIds.add(match.id);
+        if(poly._autoName){
+          poly.name = pickName(poly.props);
+          poly.autoName = poly.name;
+        }
+        newlyMatched++;
+      }
+    });
+    return newlyMatched;
+  }
+  function buildDisplayParcels(){
+    const usedPinIds = new Set(rawPolygons.filter(p => p._matchedPinId).map(p => p._matchedPinId));
+    const list = rawPolygons.slice();
+    rawPins.forEach(pin => { if(!usedPinIds.has(pin.id)) list.push(pin); });
+    return list;
+  }
+  function pruneOrphanSelections(list){
+    const ids = new Set(list.map(p => p.id));
+    Array.from(selected.keys()).forEach(id => { if(!ids.has(id)) selected.delete(id); });
+    hidden = new Set(Array.from(hidden).filter(id => ids.has(id)));
+    pendingHide = new Set(Array.from(pendingHide).filter(id => ids.has(id)));
+    units.forEach(u => { u.memberIds = u.memberIds.filter(id => ids.has(id)); });
+    units = units.filter(u => u.memberIds.length >= 2);
+    mergeAnchorId = null;
+    reindexUnits();
+  }
+  function rebuild(){
+    const list = buildDisplayParcels();
+    pruneOrphanSelections(list);
+    isolateHiddenIds = null;
+    renderParcels(list);
+    renderList();
+  }
+
+  // ================================================================
+  //  見た目
+  // ================================================================
+  function reindexUnits(){
+    unitByMember = new Map();
+    units.forEach(u => u.memberIds.forEach(id => unitByMember.set(id, u)));
+  }
+  function unitOf(pid){ return unitByMember.get(pid) || null; }
+  // 区画の「見た目のもと」。まとめられている場合はまとめ側を優先する。
+  function entryFor(pid){ return unitOf(pid) || selected.get(pid) || null; }
+
+  function combinedStyleFor(id){
+    if(hideMode && pendingHide.has(id)) return {color:'#ff2d2d', weight:2.5, dashArray:'7,4', fillOpacity:0.35, fillColor:'#ff2d2d'};
+    const sel = entryFor(id);
+    // 未選択は白い細線。航空写真の上でも土・草・水面を問わず輪郭が見える。
+    if(!sel) return {color:'#ffffff', weight:1.6, opacity:0.9, fillOpacity:0.05, fillColor:'#ffffff', dashArray:null};
+    const c = sel.type === 'work' ? workColor : manageColor;
+    // まとめ中の圃場は黄色の破線で囲んで、どれが対象か分かるようにする
+    if(isMergeAnchor(id)) return {color:'#ffe14a', weight:6, opacity:1, fillOpacity:0.4, fillColor:c, dashArray:'9,5'};
+    return {color:c, weight:4, opacity:1, fillOpacity:0.35, fillColor:c, dashArray:null};
+  }
+  function styleForParcel(p){
+    const st = combinedStyleFor(p.id);
+    if(p.kind === 'polygon') return st;
+    return Object.assign({}, st, {radius:10, weight:3, fillOpacity: Math.max(st.fillOpacity, 0.55)});
+  }
+  function updateLayerLabel(p){
+    if(!p.layer) return;
+    p.layer.unbindTooltip();
+    const text = labelText(p);
+    if(!text) return;   // 地番も名前も無いときはラベルを出さない
+    // 常時ラベルは「地番がある」か「選択済み」の区画だけ。
+    // それ以外を常時表示すると地図が文字で埋まるため、ホバー表示にする。
+    const permanent = showChibanLabels && (hasChiban(p) || selected.has(p.id));
+    if(permanent){
+      p.layer.bindTooltip(escapeHtml(text), {permanent:true, direction:'center', className:'chiban-label'});
+    } else {
+      p.layer.bindTooltip(escapeHtml(text), {sticky:true});
+    }
+  }
+  function applyStyleToAll(){
+    reindexUnits();
+    parcels.forEach(p => { if(p.layer) p.layer.setStyle(styleForParcel(p)); });
+  }
+  function applyLabelsToAll(){ parcels.forEach(p => updateLayerLabel(p)); }
+
+  function buildLayer(p){
+    let layer;
+    if(p.kind === 'polygon' && p.latlngs && p.latlngs.length > 2){
+      layer = L.polygon(p.latlngs, styleForParcel(p));
+    } else if(p.point){
+      layer = L.circleMarker(p.point, styleForParcel(p));
+    } else { return null; }
+    layer.on('click', e => {
+      if(hideMode){ togglePendingHide(p.id); return; }
+      const ev = e && e.originalEvent;
+      // Ctrl（MacはCommand）を押しながらのクリックは「まとめる」操作
+      if(ev && (ev.ctrlKey || ev.metaKey)){ ctrlMerge(p.id); return; }
+      toggleSelect(p.id);
+    });
+    return layer;
+  }
+  function renderParcels(list){
+    layerGroup.clearLayers();
+    parcels = list;
+    byId = new Map(parcels.map(p => [p.id, p]));
+    // 面積の大きい区画から先に描画 → 小さい区画が上に来てクリックしやすくなる
+    const drawOrder = parcels.slice().sort((a, b) => parcelArea(b) - parcelArea(a));
+    const bounds = [];
+    drawOrder.forEach(p => {
+      const layer = buildLayer(p);
+      p.layer = layer;
+      if(!layer) return;
+      if(!hidden.has(p.id)){
+        layer.addTo(layerGroup);
+        if(p.kind === 'polygon') p.latlngs.forEach(ll => bounds.push(ll)); else bounds.push(p.point);
+      }
+    });
+    applyLabelsToAll();
+    if(bounds.length) map.fitBounds(bounds, {padding:[30,30]});
+    renderHiddenStatus();
+  }
+  function boundsOfMembers(members){
+    let b = null;
+    members.forEach(p => {
+      if(!p) return;
+      let pb = null;
+      if(p.kind === 'polygon' && p.latlngs && p.latlngs.length) pb = L.latLngBounds(p.latlngs);
+      else if(p.point) pb = L.latLngBounds([p.point[0]-0.0004, p.point[1]-0.0004], [p.point[0]+0.0004, p.point[1]+0.0004]);
+      if(!pb) return;
+      b = b ? b.extend(pb) : L.latLngBounds(pb.getSouthWest(), pb.getNorthEast());
+    });
+    return b;
+  }
+
+  // ================================================================
+  //  元に戻す / やり直す
+  // ================================================================
+  // 区画そのもの（props・座標）は読み込み後に変わらないので、
+  // 変更しうる「利用者が付けた名前」だけを記録する。全区画をコピーすると重くなる。
+  function snapshotState(){
+    return JSON.stringify({
+      names: parcels.filter(p => p._autoName === false).map(p => [p.id, p.name]),
+      selected: Array.from(selected.entries()),
+      hidden: Array.from(hidden),
+      checked: Array.from(checkedIds),
+      groups, activeTab, groupSeq, units, unitSeq, cropList,
+      manageColor, workColor, showChibanLabels
+    });
+  }
+  function restoreState(snapJSON){
+    const s = JSON.parse(snapJSON);
+    const nameMap = new Map(s.names || []);
+    parcels.forEach(p => {
+      if(nameMap.has(p.id)){ p.name = nameMap.get(p.id); p._autoName = false; }
+      else { p.name = p.autoName != null ? p.autoName : p.name; p._autoName = true; }
+    });
+    selected = new Map(s.selected);
+    hidden = new Set(s.hidden);
+    checkedIds = new Set(s.checked || []);
+    groups = s.groups || [];
+    activeTab = s.activeTab || 'all';
+    groupSeq = s.groupSeq || (groups.length + 1);
+    units = s.units || [];
+    unitSeq = s.unitSeq || (units.length + 1);
+    mergeAnchorId = null;
+    cropList = s.cropList || [];
+    manageColor = s.manageColor; workColor = s.workColor; showChibanLabels = s.showChibanLabels;
+    reindexUnits();
+    el('manageColorInput').value = manageColor;
+    el('workColorInput').value = workColor;
+    document.documentElement.style.setProperty('--c-manage', manageColor);
+    document.documentElement.style.setProperty('--c-work', workColor);
+    el('chibanBtn').textContent = '地番ラベル: ' + (showChibanLabels ? 'ON' : 'OFF');
+    parcels.forEach(p => {
+      if(!p.layer) return;
+      if(hidden.has(p.id)) layerGroup.removeLayer(p.layer); else layerGroup.addLayer(p.layer);
+    });
+    applyStyleToAll();
+    applyLabelsToAll();
+    isolateHiddenIds = null;
+    renderList();
+    renderHiddenStatus();
+    updateUndoRedoButtons();
+    markDirty();
+  }
+  function pushUndo(){
+    undoStack.push(snapshotState());
+    if(undoStack.length > 50) undoStack.shift();
+    redoStack = [];
+    updateUndoRedoButtons();
+    markDirty();
+  }
+  function updateUndoRedoButtons(){
+    el('undoBtn').disabled = undoStack.length === 0;
+    el('redoBtn').disabled = redoStack.length === 0;
+  }
+  function resetHistory(){ undoStack = []; redoStack = []; updateUndoRedoButtons(); }
+  function doUndo(){
+    if(!undoStack.length) return;
+    redoStack.push(snapshotState());
+    restoreState(undoStack.pop());
+  }
+  function doRedo(){
+    if(!redoStack.length) return;
+    undoStack.push(snapshotState());
+    restoreState(redoStack.pop());
+  }
+  el('undoBtn').addEventListener('click', doUndo);
+  el('redoBtn').addEventListener('click', doRedo);
+
+  // ================================================================
+  //  選択
+  // ================================================================
+  function newEntry(group){ return {type:'work', note:'', zone:'', crop:'', group:group || null}; }
+  function currentTabGroup(){ return (activeTab === 'all' || activeTab === 'none') ? null : activeTab; }
+
+  // ---------- Ctrl+クリックでまとめる ----------
+  // mergeAnchorId … まとめ先。すでにまとまっていればそのまとめのid、1筆目だけならその区画id。
+  let mergeAnchorId = null;
+
+  function isMergeAnchor(id){
+    if(!mergeAnchorId) return false;
+    if(mergeAnchorId === id) return true;
+    const u = unitOf(id);
+    return !!(u && u.id === mergeAnchorId);
+  }
+  function clearMergeAnchor(redraw){
+    if(!mergeAnchorId) return;
+    mergeAnchorId = null;
+    if(redraw){ applyStyleToAll(); renderList(); }
+  }
+  // 区画をまとめから外す。残りが1筆になったまとめは解消する。
+  function detachFromUnit(pid){
+    const u = unitOf(pid);
+    if(!u) return;
+    u.memberIds = u.memberIds.filter(x => x !== pid);
+    if(u.memberIds.length < 2){
+      u.memberIds.forEach(mid => {
+        if(!selected.has(mid)) selected.set(mid, {type:u.type, note:u.note || '', zone:u.zone || '', crop:u.crop || '', group:u.group});
+      });
+      units = units.filter(x => x.id !== u.id);
+      checkedIds.delete(u.id);
+      if(mergeAnchorId === u.id) mergeAnchorId = u.memberIds[0] || null;
+    }
+    reindexUnits();
+  }
+  function afterMergeChange(){
+    applyStyleToAll();
+    applyLabelsToAll();
+    renderList();
+    // まとめた圃場のカードを見える位置へ出す（そのまま名前を入れられるように）
+    if(mergeAnchorId){
+      const card = document.querySelector('#list .card-item[data-id="' + mergeAnchorId + '"]');
+      if(card){ try{ card.scrollIntoView({block:'nearest'}); }catch(e){} }
+    }
+  }
+  function ctrlMerge(pid){
+    pushUndo();
+    const anchorUnit = mergeAnchorId ? units.find(u => u.id === mergeAnchorId) : null;
+
+    // まとめ先に入っている筆をもう一度Ctrl+クリック → そのまとめから外す
+    if(anchorUnit && unitOf(pid) === anchorUnit){
+      detachFromUnit(pid);
+      afterMergeChange();
+      toast('この筆をまとめから外しました。');
+      return;
+    }
+
+    if(!selected.has(pid)) selected.set(pid, newEntry(currentTabGroup()));
+
+    // すでにまとめ先が確定している → そこに追加
+    if(anchorUnit){
+      detachFromUnit(pid);
+      anchorUnit.memberIds.push(pid);
+      reindexUnits();
+      afterMergeChange();
+      toast(anchorUnit.memberIds.length + '筆を1圃場' + unitLabel(anchorUnit) + 'にまとめました。');
+      return;
+    }
+
+    // 起点がある → 2筆をまとめて新しい圃場を作る（起点が既にまとめの一員ならそこへ追加）
+    if(mergeAnchorId && mergeAnchorId !== pid){
+      const first = mergeAnchorId;
+      const firstUnit = unitOf(first);
+      if(firstUnit){
+        detachFromUnit(pid);
+        firstUnit.memberIds.push(pid);
+        mergeAnchorId = firstUnit.id;
+        reindexUnits();
+        afterMergeChange();
+        toast(firstUnit.memberIds.length + '筆を1圃場' + unitLabel(firstUnit) + 'にまとめました。');
+        return;
+      }
+      if(!selected.has(first) || !byId.has(first)){
+        mergeAnchorId = pid;
+        afterMergeChange();
+        return;
+      }
+      detachFromUnit(pid);
+      const base = selected.get(first) || newEntry(null);
+      const u = {
+        id: 'u' + (unitSeq++),
+        name: defaultUnitName([first, pid]),
+        memberIds: [first, pid],
+        type: base.type || 'work',
+        note: base.note || '',
+        zone: base.zone || '',
+        crop: base.crop || '',
+        group: base.group || null
+      };
+      units.push(u);
+      mergeAnchorId = u.id;
+      reindexUnits();
+      afterMergeChange();
+      toast('2筆を1圃場' + unitLabel(u) + 'にまとめました。名前は右の一覧で入れられます（続けてCtrl+クリックで追加も可）。');
+      return;
+    }
+
+    // 1回目：まとめの起点として覚える
+    mergeAnchorId = pid;
+    afterMergeChange();
+    toast('まとめの起点にしました。続けてCtrl+クリックすると同じ圃場にまとまります（Escで解除）。');
+  }
+
+  function toggleSelect(id){
+    pushUndo();
+    clearMergeAnchor(false);
+    const u = unitOf(id);
+    if(u){
+      // まとめの一員を外す。1筆になったらまとめを解消する。
+      u.memberIds = u.memberIds.filter(x => x !== id);
+      selected.delete(id);
+      if(u.memberIds.length < 2){
+        u.memberIds.forEach(mid => {
+          if(!selected.has(mid)) selected.set(mid, {type:u.type, note:u.note || '', zone:u.zone || '', crop:u.crop || '', group:u.group});
+        });
+        units = units.filter(x => x.id !== u.id);
+      }
+      reindexUnits();
+    } else if(selected.has(id)){
+      selected.delete(id);
+    } else {
+      const g = (activeTab === 'all' || activeTab === 'none') ? null : activeTab;
+      selected.set(id, newEntry(g));
+    }
+    const p = byId.get(id);
+    if(p && p.layer){ p.layer.setStyle(styleForParcel(p)); updateLayerLabel(p); }
+    renderList();
+  }
+
+  // ================================================================
+  //  フォルダ（タブ）
+  // ================================================================
+  function groupName(gid){
+    const g = groups.find(x => x.id === gid);
+    return g ? g.name : '未分類';
+  }
+  function inActiveTab(sel){
+    if(activeTab === 'all') return true;
+    if(activeTab === 'none') return !sel.group;
+    return sel.group === activeTab;
+  }
+  function renderTabs(items){
+    const bar = el('tabBar');
+    bar.innerHTML = '';
+    const counts = new Map();
+    let noneCount = 0;
+    items.forEach(it => {
+      const g = it.entry.group;
+      if(g) counts.set(g, (counts.get(g) || 0) + 1); else noneCount++;
+    });
+    const tabs = [{id:'all', name:'すべて'}, {id:'none', name:'未分類'}].concat(groups);
+    tabs.forEach(t => {
+      const n = t.id === 'all' ? items.length : (t.id === 'none' ? noneCount : (counts.get(t.id) || 0));
+      const b = document.createElement('button');
+      b.className = 'tab' + (activeTab === t.id ? ' on' : '');
+      b.innerHTML = '<span class="tab-name">' + escapeHtml(t.name) + '</span><span class="tab-n">' + n + '</span>';
+      b.onclick = () => { activeTab = t.id; renderList(); };
+      if(t.id !== 'all' && t.id !== 'none'){
+        b.ondblclick = () => renameGroup(t.id);
+        b.title = 'ダブルクリックで名前の変更・削除';
+      }
+      bar.appendChild(b);
+    });
+    const add = document.createElement('button');
+    add.className = 'tab-add';
+    add.textContent = '＋ フォルダ';
+    add.title = '新しいフォルダを作る';
+    add.onclick = addGroup;
+    bar.appendChild(add);
+  }
+  function addGroup(){
+    const name = prompt('フォルダ名を入力してください（例: 第1農場、来週作業）');
+    if(name === null) return;
+    const trimmed = name.trim();
+    if(!trimmed) return;
+    pushUndo();
+    const g = {id: 'g' + (groupSeq++), name: trimmed};
+    groups.push(g);
+    activeTab = g.id;
+    renderList();
+  }
+  function renameGroup(gid){
+    const g = groups.find(x => x.id === gid);
+    if(!g) return;
+    const name = prompt('フォルダ名を変更（空欄にするとフォルダを削除します。中の圃場は未分類に戻ります）', g.name);
+    if(name === null) return;
+    pushUndo();
+    const trimmed = name.trim();
+    if(!trimmed){
+      groups = groups.filter(x => x.id !== gid);
+      selected.forEach(s => { if(s.group === gid) s.group = null; });
+      units.forEach(u => { if(u.group === gid) u.group = null; });
+      if(activeTab === gid) activeTab = 'all';
+      toast('フォルダ「' + g.name + '」を削除しました。');
+    } else {
+      g.name = trimmed;
+    }
+    renderList();
+  }
+  function entryByKind(id, kind){
+    return kind === 'unit' ? units.find(u => u.id === id) : selected.get(id);
+  }
+  function setGroup(id, gid, kind){
+    const e = entryByKind(id, kind);
+    if(!e) return;
+    pushUndo();
+    e.group = gid || null;
+    renderList();
+  }
+  function setType(id, type, kind){
+    const e = entryByKind(id, kind);
+    if(!e || e.type === type) return;
+    pushUndo();
+    e.type = type;
+    applyStyleToAll();
+    renderList();
+  }
+  function setCrop(id, value, kind){
+    const e = entryByKind(id, kind);
+    if(!e) return;
+    if(value === '__add__'){
+      const name = prompt('作物名を入力してください（例：水稲、ゆず、生姜）');
+      const trimmed = name === null ? '' : name.trim();
+      if(!trimmed){ renderList(); return; }
+      pushUndo();
+      if(!cropList.includes(trimmed)) cropList.push(trimmed);
+      e.crop = trimmed;
+    } else {
+      pushUndo();
+      e.crop = value;
+    }
+    renderList();
+  }
+
+  // ================================================================
+  //  まとめ（複数の筆を1圃場に）
+  // ================================================================
+  // まとめた圃場の名前。地番があればそれを引き継ぎ、無ければ空欄のままにする。
+  function defaultUnitName(ids){
+    for(const id of ids){
+      const p = byId.get(id);
+      const t = p ? labelText(p) : '';
+      if(t) return t;
+    }
+    return '';
+  }
+  // 通知文で使う呼び名。名前が未入力のときは何も付けない。
+  function unitLabel(u){
+    return u && u.name ? '「' + u.name + '」' : '';
+  }
+  function mergeSelected(){
+    const items = listItems();
+    const picked = items.filter(it => checkedIds.has(it.id));
+    if(picked.length < 2){ toast('まとめたい圃場のチェックを2つ以上入れてください。', 'err'); return; }
+    const memberIds = [];
+    picked.forEach(it => {
+      if(it.kind === 'unit') memberIds.push(...it.entry.memberIds);
+      else memberIds.push(it.id);
+    });
+    if(memberIds.length < 2){ toast('まとめるには2筆以上が必要です。', 'err'); return; }
+    pushUndo();
+    const baseUnit = picked.find(it => it.kind === 'unit');
+    const base = baseUnit ? baseUnit.entry : picked[0].entry;
+    const u = {
+      id: 'u' + (unitSeq++),
+      name: baseUnit ? base.name : defaultUnitName(memberIds),
+      memberIds,
+      type: base.type || 'work',
+      note: baseUnit ? (base.note || '') : '',
+      zone: base.zone || '',
+      crop: base.crop || '',
+      group: base.group || null
+    };
+    const mergedUnitIds = new Set(picked.filter(it => it.kind === 'unit').map(it => it.id));
+    units = units.filter(x => !mergedUnitIds.has(x.id));
+    units.push(u);
+    reindexUnits();
+    checkedIds.clear();
+    checkedIds.add(u.id);
+    applyStyleToAll();
+    applyLabelsToAll();
+    renderList();
+    toast(memberIds.length + '筆を1つの圃場' + unitLabel(u) + 'にまとめました。');
+  }
+  function unmergeUnit(uid){
+    const u = units.find(x => x.id === uid);
+    if(!u) return;
+    pushUndo();
+    u.memberIds.forEach(id => {
+      // まとめに入れた情報（メモ・地域グループ・作物）は、ばらしても各筆に残す
+      if(!selected.has(id)) selected.set(id, {type:u.type, note:u.note || '', zone:u.zone || '', crop:u.crop || '', group:u.group});
+      else {
+        const s = selected.get(id);
+        s.type = u.type; s.group = u.group;
+        if(!s.zone) s.zone = u.zone || '';
+        if(!s.crop) s.crop = u.crop || '';
+        if(!s.note) s.note = u.note || '';
+      }
+    });
+    const n = u.memberIds.length;
+    units = units.filter(x => x.id !== uid);
+    checkedIds.delete(uid);
+    reindexUnits();
+    applyStyleToAll();
+    applyLabelsToAll();
+    renderList();
+    toast('まとめ' + unitLabel(u) + 'を' + n + '筆に分けました。');
+  }
+  function removeUnit(uid){
+    const u = units.find(x => x.id === uid);
+    if(!u) return;
+    pushUndo();
+    u.memberIds.forEach(id => selected.delete(id));
+    units = units.filter(x => x.id !== uid);
+    checkedIds.delete(uid);
+    reindexUnits();
+    applyStyleToAll();
+    applyLabelsToAll();
+    renderList();
+  }
+
+  // ================================================================
+  //  一覧の単位・しぼり込み（印刷対象もここに揃える）
+  // ================================================================
+  function listItems(){
+    reindexUnits();
+    const out = [];
+    units.forEach(u => {
+      const members = u.memberIds.map(id => byId.get(id)).filter(Boolean);
+      if(!members.length) return;
+      out.push({kind:'unit', id:u.id, entry:u, members, name:u.name});
+    });
+    selected.forEach((sel, id) => {
+      if(unitByMember.has(id)) return;
+      const p = byId.get(id);
+      if(!p) return;
+      out.push({kind:'solo', id, entry:sel, members:[p], name:p.name});
+    });
+    return out;
+  }
+  function filterState(){
+    return {
+      q: (el('searchInput').value || '').trim().toLowerCase(),
+      crop: el('cropFilter').value
+    };
+  }
+  function matchesFilter(it, f){
+    const sel = it.entry;
+    if(f.crop === '__none__' && sel.crop) return false;
+    if(f.crop && f.crop !== '__none__' && sel.crop !== f.crop) return false;
+    if(f.q){
+      const hay = (it.name + ' ' + it.members.map(m => labelText(m)).join(' ') + ' '
+        + (sel.note || '') + ' ' + (sel.zone || '')).toLowerCase();
+      if(!hay.includes(f.q)) return false;
+    }
+    return true;
+  }
+  function isFiltering(){
+    const f = filterState();
+    return !!(f.q || f.crop);
+  }
+  // 一覧に見えているもの＝操作と印刷の対象
+  function visibleItems(items){
+    const f = filterState();
+    return (items || listItems()).filter(it => inActiveTab(it.entry) && matchesFilter(it, f));
+  }
+  function printTargets(items){
+    const vis = visibleItems(items);
+    const picked = vis.filter(it => checkedIds.has(it.id));
+    return picked.length ? picked : vis;
+  }
+
+  // ================================================================
+  //  地図移動・点滅
+  // ================================================================
+  let flashTimer = null;
+  function jumpToItem(it){
+    if(!it) return;
+    // 非表示になっていたら一時的に戻す（見えない場所へ飛んで迷わないように）
+    let revived = 0;
+    it.members.forEach(p => {
+      if(hidden.has(p.id)){
+        hidden.delete(p.id);
+        if(p.layer) layerGroup.addLayer(p.layer);
+        revived++;
+      }
+    });
+    const b = boundsOfMembers(it.members);
+    if(b) map.fitBounds(b, {padding:[80,80], maxZoom:18});
+    if(flashTimer){ clearInterval(flashTimer.id); flashTimer.reset(); flashTimer = null; }
+    const layers = it.members.map(p => p.layer).filter(Boolean);
+    const orig = it.members.filter(p => p.layer).map(p => styleForParcel(p));
+    const reset = () => layers.forEach((l, i) => l.setStyle(orig[i]));
+    let n = 0;
+    const id = setInterval(() => {
+      n++;
+      if(n > 6){ clearInterval(id); reset(); flashTimer = null; return; }
+      if(n % 2) layers.forEach(l => l.setStyle({color:'#ffe14a', weight:7, opacity:1, fillOpacity:0.55, fillColor:'#ffe14a'}));
+      else reset();
+    }, 220);
+    flashTimer = {id, reset};
+    if(revived) renderHiddenStatus();
+  }
+
+  // ================================================================
+  //  一覧の描画
+  // ================================================================
+  function updateMergeBtn(items){
+    const valid = new Set(items.map(it => it.id));
+    Array.from(checkedIds).forEach(id => { if(!valid.has(id)) checkedIds.delete(id); });
+    const n = checkedIds.size;
+    const btn = el('mergeBtn');
+    btn.disabled = n < 2;
+    btn.textContent = n >= 2 ? ('チェックした' + n + '件を1圃場にまとめる') : 'まとめる（2件以上チェック）';
+    el('uncheckBtn').disabled = n === 0;
+  }
+  function updatePrintBtn(items){
+    const vis = visibleItems(items);
+    const targets = printTargets(items);
+    const n = targets.length;
+    const btn = el('printBtn');
+    const hint = el('footHint');
+    btn.disabled = n === 0;
+    if(n === 0){
+      btn.textContent = '印刷する';
+      hint.textContent = items.length ? 'いまの表示に印刷できる圃場がありません。' : '';
+      return;
+    }
+    const usingChecks = checkedIds.size > 0 && vis.some(it => checkedIds.has(it.id));
+    if(usingChecks){
+      btn.textContent = 'チェックした' + n + '枚を印刷';
+      hint.textContent = 'チェックした ' + n + '件だけを印刷します（1圃場=1枚）。';
+    } else {
+      btn.textContent = '印刷する（' + n + '枚）';
+      const where = activeTab === 'all' ? '' : '「' + (activeTab === 'none' ? '未分類' : groupName(activeTab)) + '」の';
+      hint.textContent = where + (isFiltering() ? 'しぼり込み中の ' : '') + n + '件を印刷します（1圃場=1枚）。';
+    }
+    // 名前も地番も無い圃場は、ほぼ白紙の紙になってしまうので知らせる
+    const blank = targets.filter(it => !it.name && !chibanListOf(it.members).length).length;
+    if(blank) hint.textContent += ' ※うち' + blank + '件は名前も地番も未入力です。';
+  }
+  function syncCropFilter(){
+    const cf = el('cropFilter');
+    const prev = cf.value;
+    cf.innerHTML = '<option value="">全作物</option><option value="__none__">作物なし</option>'
+      + cropList.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+    if([...cf.options].some(o => o.value === prev)) cf.value = prev;
+  }
+
+  function renderList(){
+    const items = listItems();
+    const chips = el('countChips');
+    let nManage = 0, nWork = 0, totalArea = 0;
+    items.forEach(it => {
+      if(it.entry.type === 'work') nWork++; else nManage++;
+      totalArea += itemArea(it);
+    });
+    const nUnits = items.filter(it => it.kind === 'unit').length;
+    chips.innerHTML = items.length
+      ? `<span class="chip" style="background:${workColor}">作業 ${nWork}</span>` +
+        `<span class="chip" style="background:${manageColor}">管理 ${nManage}</span>` +
+        (nUnits ? `<span class="chip-none">まとめ ${nUnits}件</span>` : '') +
+        (totalArea ? `<span class="chip-none">計 ${fmtAreaShort(totalArea)}</span>` : '')
+      : '<span class="chip-none">まだ選んでいません</span>';
+
+    syncCropFilter();
+    renderTabs(items);
+    updateMergeBtn(items);
+    updatePrintBtn(items);
+    updateIsolateBtn();
+
+    const list = el('list');
+    const keepScroll = list.scrollTop;
+
+    if(!items.length){
+      list.innerHTML = '<div class="empty-note">地図をクリックして圃場を選んでください。<br>選んだ圃場が1枚ずつの圃場票になります。<br><button class="link" id="emptyHelpBtn2">→ 使い方を見る</button></div>';
+      const h = el('emptyHelpBtn2');
+      if(h) h.onclick = openHelp;
+      return;
+    }
+
+    const vis = visibleItems(items);
+    if(!vis.length){
+      list.innerHTML = '<div class="empty-note">'
+        + (isFiltering() ? 'しぼり込みに一致する圃場がありません。' : 'このフォルダにはまだ圃場がありません。<br>各カードの「フォルダ」欄から移動できます。')
+        + '</div>';
+      return;
+    }
+
+    list.innerHTML = '';
+    vis.forEach(it => {
+      const sel = it.entry;
+      const isUnit = it.kind === 'unit';
+      const m2 = itemArea(it);
+      const div = document.createElement('div');
+      div.className = 'card-item'
+        + (sel.type === 'work' ? ' type-work' : '')
+        + (isUnit ? ' is-unit' : '')
+        + (isUnit && expandedUnits.has(it.id) ? ' open' : '')
+        + (sel.note ? ' has-note show-note' : '');
+      div.dataset.id = it.id;
+      div.dataset.kind = it.kind;
+      const groupOpts = ['<option value="">未分類</option>']
+        .concat(groups.map(g => `<option value="${g.id}" ${sel.group===g.id?'selected':''}>${escapeHtml(g.name)}</option>`))
+        .join('');
+      const cropOpts = ['<option value="">作物なし</option>']
+        .concat(cropList.map(c => `<option value="${escapeHtml(c)}" ${sel.crop===c?'selected':''}>${escapeHtml(c)}</option>`))
+        .concat(['<option value="__add__">＋作物を追加…</option>'])
+        .join('');
+      div.innerHTML = `
+        <div class="row1">
+          <input type="checkbox" class="pick" data-id="${it.id}" ${checkedIds.has(it.id)?'checked':''} title="印刷・まとめの対象にする">
+          ${isUnit ? '<button class="unit-badge" data-id="' + it.id + '" title="クリックすると、まとめた筆の一覧を開いて名前を直せます">'
+            + (expandedUnits.has(it.id) ? '▾ ' : '▸ ') + it.members.length + '筆</button>' : ''}
+          <input type="text" class="name-input" data-id="${it.id}" data-kind="${it.kind}" value="${escapeHtml(it.name || '')}"
+            placeholder="${isUnit ? 'まとめた圃場の名前' : '圃場の名前'}" title="ここに名前を入れられます">
+          ${m2 ? '<span class="m2" title="' + escapeHtml(fmtAreaFull(m2)) + '">' + fmtAreaShort(m2) + '</span>' : ''}
+          <button class="icon-btn jump" data-id="${it.id}" title="この圃場へ地図を移動">移動</button>
+          <button class="icon-btn memo" title="メモ">✎</button>
+          <button class="icon-btn remove" data-id="${it.id}" data-kind="${it.kind}" title="リストから外す">✕</button>
+        </div>
+        <div class="row2">
+          <span class="seg">
+            <button class="type-btn ${sel.type==='work'?'on':''}" data-id="${it.id}" data-kind="${it.kind}" data-type="work"
+              style="${sel.type==='work'?'background:'+workColor:''}">作業</button>
+            <button class="type-btn ${sel.type==='manage'?'on':''}" data-id="${it.id}" data-kind="${it.kind}" data-type="manage"
+              style="${sel.type==='manage'?'background:'+manageColor:''}">管理</button>
+          </span>
+          <select class="group-select" data-id="${it.id}" data-kind="${it.kind}" title="フォルダ">${groupOpts}</select>
+          <select class="crop-select" data-id="${it.id}" data-kind="${it.kind}" title="作物">${cropOpts}</select>
+          ${isUnit ? '<button class="split-btn" data-id="'+it.id+'" title="まとめを解除して、元の筆ごとに戻します">まとめ解除</button>' : ''}
+        </div>
+        <input type="text" placeholder="地域グループ（例：片魚01）" data-id="${it.id}" data-kind="${it.kind}" class="zone-input" value="${escapeHtml(sel.zone || '')}">
+        <input type="text" placeholder="メモ（任意）" data-id="${it.id}" data-kind="${it.kind}" class="note-input" value="${escapeHtml(sel.note || '')}">
+        ${isUnit ? '<div class="member-list"><div class="member-hint">この圃場に入っている筆（名前はここでも直せます）</div>'
+          + it.members.map(m => '<div class="member-row">'
+              + '<input type="text" class="m-name" data-pid="' + m.id + '" value="' + escapeHtml(m.name || '') + '" placeholder="この筆の名前（未入力）">'
+              + '<button class="m-off" data-pid="' + m.id + '" title="この筆だけまとめから外します">外す</button>'
+            + '</div>').join('')
+          + '</div>' : ''}
+      `;
+      list.appendChild(div);
+    });
+
+    const itemMap = new Map(items.map(it => [it.id, it]));
+    const entryOf = inp => entryByKind(inp.dataset.id, inp.dataset.kind);
+
+    // カードの余白クリックでは地図を動かさない（誤操作が多いため「移動」ボタンだけに限定）
+    list.querySelectorAll('.type-btn').forEach(b => {
+      b.onclick = () => setType(b.dataset.id, b.dataset.type, b.dataset.kind);
+    });
+    list.querySelectorAll('.group-select').forEach(s => {
+      s.onchange = () => setGroup(s.dataset.id, s.value, s.dataset.kind);
+    });
+    list.querySelectorAll('.crop-select').forEach(s => {
+      s.onchange = () => setCrop(s.dataset.id, s.value, s.dataset.kind);
+    });
+    list.querySelectorAll('.split-btn').forEach(b => b.onclick = () => unmergeUnit(b.dataset.id));
+    // 筆数バッジで、まとめた中身の開閉
+    list.querySelectorAll('.unit-badge').forEach(b => {
+      b.onclick = () => {
+        const id = b.dataset.id;
+        if(expandedUnits.has(id)) expandedUnits.delete(id); else expandedUnits.add(id);
+        renderList();
+      };
+    });
+    // まとめた中の筆の名前を直す
+    list.querySelectorAll('.m-name').forEach(inp => {
+      inp.addEventListener('focus', function handler(){ pushUndo(); inp.removeEventListener('focus', handler); });
+      inp.oninput = () => {
+        const p = byId.get(inp.dataset.pid);
+        if(!p) return;
+        p.name = inp.value;
+        p._autoName = false;
+        updateLayerLabel(p);
+        markDirty();
+      };
+    });
+    list.querySelectorAll('.m-off').forEach(b => b.onclick = () => {
+      pushUndo();
+      detachFromUnit(b.dataset.pid);
+      afterMergeChange();
+    });
+    list.querySelectorAll('.pick').forEach(cb => {
+      cb.onchange = () => {
+        if(cb.checked) checkedIds.add(cb.dataset.id);
+        else checkedIds.delete(cb.dataset.id);
+        cb.closest('.card-item').classList.toggle('picked', cb.checked);
+        updateMergeBtn(items);
+        updatePrintBtn(items);
+      };
+      if(cb.checked) cb.closest('.card-item').classList.add('picked');
+    });
+    list.querySelectorAll('.icon-btn.jump').forEach(b => {
+      b.onclick = () => jumpToItem(itemMap.get(b.dataset.id));
+    });
+    list.querySelectorAll('.icon-btn.memo').forEach(b => {
+      b.onclick = () => {
+        const card = b.closest('.card-item');
+        card.classList.toggle('show-note');
+        const inp = card.querySelector('.note-input');
+        if(card.classList.contains('show-note')) inp.focus();
+      };
+    });
+    list.querySelectorAll('.icon-btn.remove').forEach(b => b.onclick = () => {
+      if(b.dataset.kind === 'unit') removeUnit(b.dataset.id);
+      else toggleSelect(b.dataset.id);
+    });
+    list.querySelectorAll('.zone-input').forEach(inp => {
+      inp.addEventListener('focus', function handler(){ pushUndo(); inp.removeEventListener('focus', handler); });
+      inp.oninput = () => {
+        const e = entryOf(inp);
+        if(e){ e.zone = inp.value; markDirty(); }
+      };
+    });
+    list.querySelectorAll('.note-input').forEach(inp => {
+      inp.addEventListener('focus', function handler(){ pushUndo(); inp.removeEventListener('focus', handler); });
+      inp.oninput = () => {
+        const e = entryOf(inp);
+        if(e){ e.note = inp.value; markDirty(); }
+        inp.closest('.card-item').classList.toggle('has-note', !!inp.value);
+      };
+    });
+    list.querySelectorAll('.name-input').forEach(inp => {
+      inp.addEventListener('focus', function handler(){ pushUndo(); inp.removeEventListener('focus', handler); });
+      inp.oninput = () => {
+        markDirty();
+        if(inp.dataset.kind === 'unit'){
+          const u = units.find(x => x.id === inp.dataset.id);
+          if(u) u.name = inp.value;
+          return;
+        }
+        const p = byId.get(inp.dataset.id);
+        if(!p) return;
+        p.name = inp.value;
+        p._autoName = false;
+        updateLayerLabel(p);
+      };
+    });
+
+    list.scrollTop = keepScroll;
+  }
+
+  // ================================================================
+  //  非表示モード
+  // ================================================================
+  function togglePendingHide(id){
+    if(pendingHide.has(id)) pendingHide.delete(id); else pendingHide.add(id);
+    const p = byId.get(id);
+    if(p && p.layer) p.layer.setStyle(styleForParcel(p));
+    el('pendingCountLabel').textContent = pendingHide.size + '件';
+  }
+  function renderHiddenStatus(){
+    el('showHiddenBtn').disabled = hidden.size === 0;
+    el('showHiddenBtn').textContent = hidden.size ? ('すべて再表示 (' + hidden.size + ')') : 'すべて再表示';
+  }
+  function setHideMode(on){
+    hideMode = on;
+    el('hideModeBtn').classList.toggle('active', on);
+    el('hideBar').classList.toggle('on', on);
+    el('mapWrap').classList.toggle('hide-mode', on);
+    // Shift+ドラッグを囲み選択に使うため、Leaflet標準の範囲ズームは止める
+    if(on){ if(map.boxZoom) map.boxZoom.disable(); }
+    else {
+      if(map.boxZoom) map.boxZoom.enable();
+      pendingHide.clear();
+      applyStyleToAll();
+    }
+    el('pendingCountLabel').textContent = pendingHide.size + '件';
+  }
+  function confirmHide(){
+    if(!pendingHide.size) return;
+    pushUndo();
+    pendingHide.forEach(id => {
+      hidden.add(id);
+      const p = byId.get(id);
+      if(p && p.layer) layerGroup.removeLayer(p.layer);
+    });
+    const n = pendingHide.size;
+    pendingHide.clear();
+    el('pendingCountLabel').textContent = '0件';
+    renderHiddenStatus();
+    toast(n + '件を非表示にしました。');
+  }
+  el('hideModeBtn').addEventListener('click', () => setHideMode(!hideMode));
+  el('confirmHideBtn').addEventListener('click', confirmHide);
+  el('cancelHideBtn').addEventListener('click', () => setHideMode(false));
+
+  // Shift+ドラッグで囲み選択（ドラッグのみなら地図の移動）
+  (function initDragSelect(){
+    const wrap = el('mapWrap');
+    const box = el('selectBox');
+    let dragging = false, startX = 0, startY = 0, moved = false;
+
+    function localPos(e){
+      const r = wrap.getBoundingClientRect();
+      return {x: e.clientX - r.left, y: e.clientY - r.top};
+    }
+    wrap.addEventListener('mousedown', e => {
+      if(!hideMode || e.button !== 0 || !e.shiftKey) return;
+      e.preventDefault();
+      map.dragging.disable();
+      const p = localPos(e);
+      dragging = true; moved = false;
+      startX = p.x; startY = p.y;
+      Object.assign(box.style, {left:startX+'px', top:startY+'px', width:'0px', height:'0px'});
+    });
+    wrap.addEventListener('mousemove', e => {
+      if(!dragging) return;
+      const p = localPos(e);
+      if(Math.abs(p.x - startX) > 4 || Math.abs(p.y - startY) > 4){
+        moved = true;
+        box.style.display = 'block';
+      }
+      box.style.left = Math.min(startX, p.x) + 'px';
+      box.style.top = Math.min(startY, p.y) + 'px';
+      box.style.width = Math.abs(p.x - startX) + 'px';
+      box.style.height = Math.abs(p.y - startY) + 'px';
+    });
+    function stop(){
+      dragging = false;
+      box.style.display = 'none';
+      map.dragging.enable();
+    }
+    wrap.addEventListener('mouseup', e => {
+      if(!dragging) return;
+      const p = localPos(e);
+      const wasMoved = moved;
+      stop();
+      if(!wasMoved) return;
+      const mapRect = el('map').getBoundingClientRect();
+      const wrapRect = wrap.getBoundingClientRect();
+      const dx = wrapRect.left - mapRect.left, dy = wrapRect.top - mapRect.top;
+      const c1 = map.containerPointToLatLng([Math.min(startX, p.x) + dx, Math.min(startY, p.y) + dy]);
+      const c2 = map.containerPointToLatLng([Math.max(startX, p.x) + dx, Math.max(startY, p.y) + dy]);
+      const area = L.latLngBounds(c1, c2);
+      let added = 0;
+      parcels.forEach(par => {
+        if(hidden.has(par.id) || pendingHide.has(par.id)) return;
+        let hit = false;
+        if(par.kind === 'polygon' && par.layer) hit = area.intersects(par.layer.getBounds());
+        else if(par.point) hit = area.contains(L.latLng(par.point[0], par.point[1]));
+        if(hit){
+          pendingHide.add(par.id);
+          if(par.layer) par.layer.setStyle(styleForParcel(par));
+          added++;
+        }
+      });
+      el('pendingCountLabel').textContent = pendingHide.size + '件';
+      if(added) logMsg('囲み選択で ' + added + '件を追加しました。');
+    });
+    wrap.addEventListener('mouseleave', () => { if(dragging) stop(); });
+  })();
+
+  el('showHiddenBtn').addEventListener('click', () => {
+    pushUndo();
+    const n = hidden.size;
+    hidden.forEach(id => {
+      const p = byId.get(id);
+      if(p && p.layer) layerGroup.addLayer(p.layer);
+    });
+    hidden.clear();
+    isolateHiddenIds = null;
+    renderHiddenStatus();
+    updateIsolateBtn();
+    toast(n + '件を再表示しました。');
+  });
+
+  function updateIsolateBtn(){
+    const btn = el('isolateBtn');
+    if(isolateHiddenIds){
+      btn.textContent = '選択以外を再表示 (' + isolateHiddenIds.size + ')';
+      btn.classList.add('active');
+      btn.disabled = false;
+      btn.title = 'この操作で隠した区画だけを元に戻します（手動で隠した分はそのまま）';
+    } else {
+      btn.textContent = '選択以外を非表示';
+      btn.classList.remove('active');
+      btn.disabled = selected.size === 0;
+      btn.title = 'リストに入れた圃場だけを残し、それ以外を非表示にします';
+    }
+  }
+  el('isolateBtn').addEventListener('click', () => {
+    if(isolateHiddenIds){
+      pushUndo();
+      const n = isolateHiddenIds.size;
+      isolateHiddenIds.forEach(id => {
+        hidden.delete(id);
+        const p = byId.get(id);
+        if(p && p.layer) layerGroup.addLayer(p.layer);
+      });
+      isolateHiddenIds = null;
+      renderHiddenStatus();
+      updateIsolateBtn();
+      toast(n + '件を再表示しました（手動で隠した分は維持）。');
+      return;
+    }
+    if(!selected.size) return;
+    pushUndo();
+    const justHidden = new Set();
+    parcels.forEach(p => {
+      if(selected.has(p.id) || hidden.has(p.id)) return;
+      hidden.add(p.id);
+      justHidden.add(p.id);
+      if(p.layer) layerGroup.removeLayer(p.layer);
+    });
+    isolateHiddenIds = justHidden.size ? justHidden : null;
+    pendingHide.clear();
+    el('pendingCountLabel').textContent = '0件';
+    renderHiddenStatus();
+    updateIsolateBtn();
+    toast('選択以外の ' + justHidden.size + '件を非表示にしました。');
+  });
+
+  // ================================================================
+  //  表示メニュー
+  // ================================================================
+  el('chibanBtn').addEventListener('click', () => {
+    pushUndo();
+    showChibanLabels = !showChibanLabels;
+    el('chibanBtn').textContent = '地番ラベル: ' + (showChibanLabels ? 'ON' : 'OFF');
+    applyLabelsToAll();
+  });
+  el('manageColorInput').addEventListener('input', () => {
+    manageColor = el('manageColorInput').value;
+    document.documentElement.style.setProperty('--c-manage', manageColor);
+    applyStyleToAll();
+    markDirty();
+  });
+  el('manageColorInput').addEventListener('focus', () => pushUndo(), {once:true});
+  el('workColorInput').addEventListener('input', () => {
+    workColor = el('workColorInput').value;
+    document.documentElement.style.setProperty('--c-work', workColor);
+    applyStyleToAll();
+    markDirty();
+  });
+  el('workColorInput').addEventListener('focus', () => pushUndo(), {once:true});
+
+  // ================================================================
+  //  ファイルの読み込み（常に追加。既存データは消さない）
+  // ================================================================
+  function readFileText(file){
+    return new Promise((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => resolve(r.result);
+      r.onerror = () => reject(r.error);
+      r.readAsText(file);
+    });
+  }
+  function normalizeEntry(s){
+    return {
+      type: s && s.type === 'manage' ? 'manage' : 'work',
+      note: (s && s.note) || '',
+      zone: (s && (s.zone != null ? s.zone : s.area)) || '',   // 旧版の area も読む
+      crop: (s && s.crop) || '',
+      group: (s && s.group) || null
+    };
+  }
+
+  // 選んだファイルを読んで、取り込み処理に渡す
+  async function handleFiles(fileList){
+    const payloads = [];
+    for(const f of Array.from(fileList)){
+      try{ payloads.push({name: f.name, text: await readFileText(f)}); }
+      catch(e){ toast(f.name + ' を読み込めませんでした。', 'err'); }
+    }
+    if(payloads.length) await ingestPayloads(payloads);
+  }
+
+  // ファイルからでもAPIからでも、取り込みはすべてここを通す
+  async function ingestPayloads(files){
+    const hadDataBefore = rawPolygons.length + rawPins.length > 0;
+    let addedPolys = 0, addedPins = 0, skipped = 0, restored = 0;
+    const failed = [];
+
+    for(const file of files){
+      try{
+        const text = file.text;
+        const obj = JSON.parse(String(text).replace(/^﻿/, ''));   // BOM付きファイル対策
+
+        if(obj.__farmlandProject){
+          // 保存ファイル: 区画に加えて選択・フォルダ・まとめ・メモも復元する
+          const idMap = new Map();
+          let polyN = 0, pinN = 0, dupN = 0;
+          const feats = [
+            ...(obj.rawPolygons || []).map(p => ({...p, _matchedPinId: p._matchedPinId || null})),
+            ...(obj.rawPins || []).map(p => ({...p}))
+          ];
+          feats.forEach(f => {
+            const oldId = f.id;
+            f.id = null;
+            if(f.autoName == null) f.autoName = f.name;
+            const r = ingestFeature(f);
+            if(oldId) idMap.set(oldId, r.id);
+            if(r.isNew){ if(f.kind === 'polygon') polyN++; else pinN++; }
+            else dupN++;
+          });
+
+          // ポリゴンが参照しているピンのIDも新IDに付け替える
+          rawPolygons.forEach(p => {
+            if(p._matchedPinId && idMap.has(p._matchedPinId)) p._matchedPinId = idMap.get(p._matchedPinId);
+          });
+
+          // フォルダは同名があれば統合、なければ作成
+          const groupMap = new Map();
+          (obj.groups || []).forEach(g => {
+            const existing = groups.find(x => x.name === g.name);
+            if(existing) groupMap.set(g.id, existing.id);
+            else {
+              const ng = {id: 'g' + (groupSeq++), name: g.name};
+              groups.push(ng);
+              groupMap.set(g.id, ng.id);
+            }
+          });
+          const remapGroup = gid => (gid ? (groupMap.get(gid) || null) : null);
+
+          (obj.selected || []).forEach(([oldId, sel]) => {
+            const newId = idMap.get(oldId);
+            if(!newId) return;
+            const e = normalizeEntry(sel);
+            e.group = remapGroup(sel && sel.group);
+            selected.set(newId, e);
+            restored++;
+          });
+
+          // まとめ（複数筆を1圃場にした情報）も引き継ぐ
+          let unitN = 0;
+          (obj.units || []).forEach(u => {
+            const mids = (u.memberIds || []).map(id => idMap.get(id)).filter(Boolean);
+            if(mids.length < 2) return;
+            const e = normalizeEntry(u);
+            e.group = remapGroup(u.group);
+            units.push(Object.assign({
+              id: 'u' + (unitSeq++),
+              name: u.name || 'まとめた圃場',
+              memberIds: mids
+            }, e));
+            unitN++;
+          });
+          reindexUnits();
+
+          (obj.cropList || []).forEach(c => { if(!cropList.includes(c)) cropList.push(c); });
+          (obj.hidden || []).forEach(oldId => {
+            const newId = idMap.get(oldId);
+            if(newId) hidden.add(newId);
+          });
+
+          if(!hadDataBefore){
+            if(obj.manageColor) manageColor = obj.manageColor;
+            if(obj.workColor) workColor = obj.workColor;
+            if(obj.showChibanLabels !== undefined) showChibanLabels = obj.showChibanLabels;
+            applyDisplaySettings();
+          }
+
+          addedPolys += polyN; addedPins += pinN; skipped += dupN;
+          logMsg(file.name + '（保存ファイル）→ 区画 ' + (polyN + pinN) + '件・選択 ' + (obj.selected || []).length + '件'
+            + (unitN ? '・まとめ ' + unitN + '件' : '') + 'を復元'
+            + (dupN ? '（重複 ' + dupN + '件はスキップ）' : ''));
+        } else {
+          const feats = parseGeoJSON(obj);
+          let polyN = 0, pinN = 0, dupN = 0;
+          feats.forEach(f => {
+            const r = ingestFeature(f);
+            if(r.isNew){ if(f.kind === 'polygon') polyN++; else pinN++; }
+            else dupN++;
+          });
+          addedPolys += polyN; addedPins += pinN; skipped += dupN;
+          logMsg(file.name + ' → ポリゴン ' + polyN + '件・ピン ' + pinN + '件を追加'
+            + (dupN ? '（重複 ' + dupN + '件はスキップ）' : ''));
+        }
+      } catch(err){
+        failed.push(file.name);
+        logMsg(file.name + ' の読み込みに失敗: ' + err.message);
+      }
+    }
+
+    if(addedPolys === 0 && addedPins === 0 && restored === 0){
+      if(failed.length) toast('読み込めませんでした: ' + failed.join(', '), 'err');
+      else if(skipped) toast('読み込んだ ' + skipped + '件はすべて登録済みの区画でした。');
+      else toast('読み込める区画がありませんでした。', 'err');
+      return;
+    }
+    const matched = runMatching();
+    rebuild();
+    resetHistory();
+    const totalMatched = rawPolygons.filter(p => p._matchedPinId).length;
+    logMsg('地番マッチング: 今回新たに ' + matched + '件付与（累計 ' + totalMatched + '/' + rawPolygons.length + ' ポリゴン）');
+    toast('区画 ' + (addedPolys + addedPins) + '件を読み込みました'
+      + (restored ? '（選択 ' + restored + '件を復元）' : '')
+      + (skipped ? '。重複 ' + skipped + '件はスキップ' : '') + '。');
+    if(failed.length) toast('一部読み込めませんでした: ' + failed.join(', '), 'err');
+    autosave();
+  }
+  el('fileInput').addEventListener('change', e => {
+    if(!e.target.files.length) return;
+    handleFiles(e.target.files);
+    e.target.value = '';
+  });
+
+  el('resetAllBtn').addEventListener('click', () => {
+    if(!confirm('画面のデータをすべて消去します。この操作は元に戻せません。\n（ブラウザに保存済みのデータは残ります）\nよろしいですか？')) return;
+    rawPolygons = []; rawPins = []; loadCounter = 0; keyToId = new Map(); cropList = [];
+    selected.clear(); hidden.clear(); pendingHide.clear();
+    units = []; groups = []; unitSeq = 1; groupSeq = 1; activeTab = 'all';
+    checkedIds.clear();
+    expandedUnits.clear();
+    reindexUnits();
+    resetHistory();
+    rebuild();
+    el('saveState').textContent = '未保存';
+    el('saveState').className = 'save-state';
+    toast('画面のデータを消去しました。');
+  });
+
+  // ================================================================
+  //  一覧操作
+  // ================================================================
+  el('searchInput').addEventListener('input', renderList);
+  el('cropFilter').addEventListener('change', renderList);
+
+  el('selectAllBtn').addEventListener('click', () => {
+    const targets = parcels.filter(p => !hidden.has(p.id) && !selected.has(p.id));
+    if(!targets.length){ toast('表示中の区画はすべてリストに入っています。'); return; }
+    if(targets.length > 200 && !confirm(targets.length + '件をリストに追加します（印刷は' + targets.length + '枚になります）。よろしいですか？')) return;
+    pushUndo();
+    const g = (activeTab === 'all' || activeTab === 'none') ? null : activeTab;
+    targets.forEach(p => {
+      selected.set(p.id, newEntry(g));
+      if(p.layer){ p.layer.setStyle(styleForParcel(p)); updateLayerLabel(p); }
+    });
+    renderList();
+    toast(targets.length + '件をリストに追加しました。');
+  });
+  el('clearBtn').addEventListener('click', () => {
+    if(!selected.size){ toast('リストは空です。'); return; }
+    if(!confirm('リストの' + listItems().length + '件をすべて外します。よろしいですか？\n（元に戻すで戻せます）')) return;
+    pushUndo();
+    selected.clear();
+    units = [];
+    checkedIds.clear();
+    mergeAnchorId = null;
+    reindexUnits();
+    applyStyleToAll();
+    applyLabelsToAll();
+    renderList();
+  });
+  el('mergeBtn').addEventListener('click', mergeSelected);
+  el('uncheckBtn').addEventListener('click', () => { checkedIds.clear(); renderList(); });
+  el('checkAllBtn').addEventListener('click', () => {
+    const vis = visibleItems();
+    if(!vis.length) return;
+    vis.forEach(it => checkedIds.add(it.id));
+    renderList();
+  });
+
+  function setAllTypes(type){
+    const targets = visibleItems();
+    if(!targets.length){ toast('対象の圃場がありません。'); return; }
+    pushUndo();
+    targets.forEach(it => { it.entry.type = type; });
+    applyStyleToAll();
+    renderList();
+    toast(targets.length + '件を「' + (type === 'work' ? '作業' : '管理') + '」にしました。');
+  }
+  el('allManageBtn').addEventListener('click', () => setAllTypes('manage'));
+  el('allWorkBtn').addEventListener('click', () => setAllTypes('work'));
+
+  // ================================================================
+  //  保存・書き出し
+  // ================================================================
+  function serializeEntry(s){
+    return {
+      type: s.type === 'manage' ? 'manage' : 'work',
+      note: s.note || '',
+      zone: s.zone || '',
+      area: s.zone || '',      // 旧版でも開けるように残す
+      crop: s.crop || '',
+      group: s.group || null
+    };
+  }
+  function serializeProject(visibleOnly){
+    let polys = rawPolygons, pins = rawPins;
+    if(visibleOnly){
+      const visibleIds = new Set(parcels.filter(p => !hidden.has(p.id)).map(p => p.id));
+      polys = rawPolygons.filter(p => visibleIds.has(p.id));
+      pins = rawPins.filter(p => visibleIds.has(p.id));
+    }
+    const keep = new Set(polys.map(p => p.id).concat(pins.map(p => p.id)));
+    return {
+      __farmlandProject: true,
+      savedAt: new Date().toISOString(),
+      loadCounter,
+      rawPolygons: polys.map(p => ({id:p.id, name:p.name, autoName:p.autoName, props:p.props, kind:p.kind, latlngs:p.latlngs, point:null, _matchedPinId:p._matchedPinId || null, _autoName: p._autoName !== false})),
+      rawPins: pins.map(p => ({id:p.id, name:p.name, autoName:p.autoName, props:p.props, kind:p.kind, latlngs:null, point:p.point, _autoName: p._autoName !== false})),
+      selected: Array.from(selected.entries()).filter(([id]) => keep.has(id)).map(([id, s]) => [id, serializeEntry(s)]),
+      hidden: visibleOnly ? [] : Array.from(hidden),
+      groups, activeTab, groupSeq,
+      units: units.filter(u => u.memberIds.every(id => keep.has(id)))
+        .map(u => Object.assign({id:u.id, name:u.name, memberIds:u.memberIds}, serializeEntry(u))),
+      unitSeq, cropList,
+      manageColor, workColor, showChibanLabels
+    };
+  }
+  function applyDisplaySettings(){
+    el('manageColorInput').value = manageColor;
+    el('workColorInput').value = workColor;
+    document.documentElement.style.setProperty('--c-manage', manageColor);
+    document.documentElement.style.setProperty('--c-work', workColor);
+    el('chibanBtn').textContent = '地番ラベル: ' + (showChibanLabels ? 'ON' : 'OFF');
+  }
+  function loadProject(obj){
+    rawPolygons = (obj.rawPolygons || []).map(p => ({...p, autoName: p.autoName != null ? p.autoName : p.name}));
+    rawPins = (obj.rawPins || []).map(p => ({...p, autoName: p.autoName != null ? p.autoName : p.name}));
+    keyToId = new Map();
+    rawPolygons.concat(rawPins).forEach(p => {
+      const k = dedupeKey(p);
+      if(k) keyToId.set(k, p.id);
+    });
+    loadCounter = obj.loadCounter || (rawPolygons.length + rawPins.length + 1);
+    selected = new Map((obj.selected || []).map(([id, s]) => [id, normalizeEntry(s)]));
+    hidden = new Set(obj.hidden || []);
+    pendingHide.clear();
+    checkedIds.clear();
+    expandedUnits.clear();
+    groups = obj.groups || [];
+    activeTab = obj.activeTab || 'all';
+    groupSeq = obj.groupSeq || (groups.length + 1);
+    units = (obj.units || []).map(u => Object.assign({id:u.id, name:u.name, memberIds:u.memberIds || []}, normalizeEntry(u)));
+    unitSeq = obj.unitSeq || (units.length + 1);
+    mergeAnchorId = null;
+    reindexUnits();
+    cropList = obj.cropList || [];
+    manageColor = obj.manageColor || '#8a5a38';
+    workColor = obj.workColor || '#33513f';
+    showChibanLabels = obj.showChibanLabels !== undefined ? obj.showChibanLabels : true;
+    applyDisplaySettings();
+    rebuild();
+    // 開いていたタブが空なら「すべて」に戻す（復元直後に0件表示で戸惑わないように）
+    if(activeTab !== 'all' && !visibleItems().length && listItems().length){
+      activeTab = 'all';
+      renderList();
+    }
+  }
+
+  function markDirty(){
+    const s = el('saveState');
+    s.textContent = '未保存';
+    s.className = 'save-state dirty';
+    if(autosaveTimer) clearTimeout(autosaveTimer);
+    autosaveTimer = setTimeout(autosave, 1500);
+  }
+  function autosave(){
+    if(autosaveTimer){ clearTimeout(autosaveTimer); autosaveTimer = null; }
+    if(rawPolygons.length + rawPins.length === 0) return;   // 空の状態で上書きしない
+    const s = el('saveState');
+    try{
+      localStorage.setItem(STORE_KEY, JSON.stringify(serializeProject()));
+      s.textContent = '自動保存 ' + new Date().toLocaleTimeString('ja-JP', {hour:'2-digit', minute:'2-digit'});
+      s.className = 'save-state ok';
+    }catch(e){
+      s.textContent = '自動保存できません';
+      s.className = 'save-state err';
+      logMsg('自動保存に失敗: ' + e.message + '（データが大きい可能性があります。JSONファイルに保存してください）');
+    }
+  }
+  el('saveBtn').addEventListener('click', () => {
+    if(rawPolygons.length + rawPins.length === 0){ toast('保存する圃場データがありません。', 'err'); return; }
+    try{
+      localStorage.setItem(STORE_KEY, JSON.stringify(serializeProject()));
+      autosave();
+      toast('このブラウザに保存しました。');
+    }catch(e){
+      toast('データが大きすぎてブラウザに保存できません。JSONファイルに保存してください。', 'err');
+      logMsg('ブラウザ保存に失敗: ' + e.message);
+    }
+  });
+  function loadSaved(){
+    let raw = null;
+    try{ raw = localStorage.getItem(STORE_KEY); }catch(e){}
+    if(!raw){ toast('保存されたデータが見つかりません。', 'err'); return; }
+    try{
+      loadProject(JSON.parse(raw));
+      resetHistory();
+      el('restoreBar').classList.remove('on');
+      toast('保存データを読み込みました。');
+    }catch(e){
+      toast('保存データを読み込めませんでした。', 'err');
+      logMsg('保存データの読み込みに失敗: ' + e.message);
+    }
+  }
+  el('loadSavedBtn').addEventListener('click', loadSaved);
+  el('restoreYes').addEventListener('click', loadSaved);
+  el('restoreNo').addEventListener('click', () => el('restoreBar').classList.remove('on'));
+
+  el('exportBtn').addEventListener('click', () => {
+    const visible = parcels.filter(p => !hidden.has(p.id));
+    if(!visible.length){ toast('表示中の圃場がありません。', 'err'); return; }
+    download(new Blob([JSON.stringify(serializeProject(true), null, 2)], {type:'application/json'}),
+      'farmland_project_' + today() + '.json');
+    toast('表示中の ' + visible.length + '件をJSONファイルに保存しました。');
+  });
+
+  function csvEsc(v){
+    const s = String(v == null ? '' : v);
+    return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  }
+  el('csvBtn').addEventListener('click', () => {
+    const items = listItems();
+    if(!items.length){ toast('書き出す圃場がありません。', 'err'); return; }
+    const head = ['名称','種別','フォルダ','作物','地域グループ','メモ','地番','住所','筆数','面積(a)','面積(㎡)','緯度','経度'];
+    const rows = items.map(it => {
+      const s = it.entry;
+      const b = boundsOfMembers(it.members);
+      const c = b ? b.getCenter() : null;
+      const chiban = chibanListOf(it.members).join('、');
+      const addr = it.members.map(m => extractAddress(m.props)).find(Boolean);
+      const m2 = itemArea(it);
+      return [
+        it.name, s.type === 'work' ? '作業' : '管理', s.group ? groupName(s.group) : '未分類',
+        s.crop || '', s.zone || '', s.note || '', chiban, addr ? addr.value : '',
+        it.members.length, m2 ? (m2/100).toFixed(2) : '', m2 ? Math.round(m2) : '',
+        c ? c.lat.toFixed(6) : '', c ? c.lng.toFixed(6) : ''
+      ];
+    });
+    // 先頭のBOMは、Excelで開いたときに文字化けさせないためのもの
+    const csv = '﻿' + [head].concat(rows).map(r => r.map(csvEsc).join(',')).join('\r\n');
+    download(new Blob([csv], {type:'text/csv;charset=utf-8'}), 'farmland_list_' + today() + '.csv');
+    toast(items.length + '件をCSVに書き出しました。');
+  });
+
+  // ================================================================
+  //  印刷（航空写真＋道路地図のミニ地図・スケールバー・QR）
+  // ================================================================
+  function lonLatToWorldPixel(lon, lat, zoom){
+    const sinLat = Math.sin(lat * Math.PI/180);
+    const n = Math.pow(2, zoom) * 256;
+    return {
+      x: (lon + 180) / 360 * n,
+      y: (0.5 - Math.log((1+sinLat)/(1-sinLat)) / (4*Math.PI)) * n
+    };
+  }
+  function pickZoom(bounds){
+    for(let z=18; z>=12; z--){
+      const p1 = lonLatToWorldPixel(bounds.getWest(), bounds.getNorth(), z);
+      const p2 = lonLatToWorldPixel(bounds.getEast(), bounds.getSouth(), z);
+      if(Math.abs(p2.x-p1.x) <= 540 && Math.abs(p2.y-p1.y) <= 540) return z;
+    }
+    return 12;
+  }
+  function addScaleBar(svg, lat, zoom){
+    const mpp = 156543.03392 * Math.cos(lat * Math.PI/180) / Math.pow(2, zoom);
+    const cands = [10,20,50,100,200,500,1000,2000];
+    let d = cands[0];
+    for(const c of cands){ if(c / mpp <= 250) d = c; }
+    const w = d / mpp, x = 26, y = MINI_BOX - 34;
+    const rect = (rx, ry, rw, rh, fill) => {
+      const r = document.createElementNS(SVG_NS, 'rect');
+      r.setAttribute('x', rx); r.setAttribute('y', ry);
+      r.setAttribute('width', rw); r.setAttribute('height', rh);
+      r.setAttribute('fill', fill);
+      svg.appendChild(r);
+      return r;
+    };
+    rect(x-12, y-42, w+24, 58, 'rgba(255,255,255,0.82)');
+    rect(x, y, w, 8, '#111');
+    rect(x, y-8, 3, 16, '#111');
+    rect(x+w-3, y-8, 3, 16, '#111');
+    const t = document.createElementNS(SVG_NS, 'text');
+    t.setAttribute('x', x); t.setAttribute('y', y-14);
+    t.setAttribute('font-size', '28'); t.setAttribute('fill', '#111');
+    t.setAttribute('font-family', 'monospace');
+    t.textContent = d + 'm';
+    svg.appendChild(t);
+  }
+  function buildMiniMap(container, members, center, zoom, caption, tileTpl){
+    const tpl = tileTpl || AERIAL_TILE;
+    // 中心が必ず画像の中央に来るように、原点を「中心 - 半分」で取る
+    const c = lonLatToWorldPixel(center.lng, center.lat, zoom);
+    const ox = c.x - MINI_BOX/2, oy = c.y - MINI_BOX/2;
+    const loads = [];
+
+    const col = document.createElement('div');
+    col.className = 'mini-col';
+    const frame = document.createElement('div');
+    frame.className = 'mini-frame';
+    frame.style.width = MINI_SIZE + 'px';
+    frame.style.height = MINI_SIZE + 'px';
+    const inner = document.createElement('div');
+    inner.className = 'mini-inner';
+    inner.style.transform = 'scale(' + (MINI_SIZE / MINI_BOX) + ')';
+
+    const maxTile = Math.pow(2, zoom) - 1;
+    const tx0 = Math.floor(ox/256), tx1 = Math.floor((ox + MINI_BOX - 1)/256);
+    const ty0 = Math.floor(oy/256), ty1 = Math.floor((oy + MINI_BOX - 1)/256);
+    for(let tx = tx0; tx <= tx1; tx++){
+      for(let ty = ty0; ty <= ty1; ty++){
+        if(ty < 0 || ty > maxTile) continue;
+        const wx = ((tx % (maxTile+1)) + (maxTile+1)) % (maxTile+1);
+        const img = document.createElement('img');
+        loads.push(new Promise(res => { img.onload = res; img.onerror = res; }));
+        img.src = tpl.replace('{z}', zoom).replace('{x}', wx).replace('{y}', ty);
+        img.style.cssText = 'position:absolute;width:256px;height:256px;left:'
+          + (tx*256 - ox) + 'px;top:' + (ty*256 - oy) + 'px;';
+        inner.appendChild(img);
+      }
+    }
+
+    const svg = document.createElementNS(SVG_NS, 'svg');
+    svg.setAttribute('width', MINI_BOX);
+    svg.setAttribute('height', MINI_BOX);
+    svg.style.cssText = 'position:absolute;left:0;top:0;pointer-events:none;';
+    members.forEach(p => {
+      if(p.kind === 'polygon' && p.latlngs){
+        const pts = p.latlngs.map(([lat,lon]) => {
+          const px = lonLatToWorldPixel(lon, lat, zoom);
+          return (px.x-ox) + ',' + (px.y-oy);
+        }).join(' ');
+        const poly = document.createElementNS(SVG_NS, 'polygon');
+        poly.setAttribute('points', pts);
+        poly.setAttribute('fill', 'rgba(230,80,40,0.25)');
+        poly.setAttribute('stroke', '#e2501f');
+        poly.setAttribute('stroke-width', '4');
+        svg.appendChild(poly);
+      } else if(p.point){
+        const pp = lonLatToWorldPixel(p.point[1], p.point[0], zoom);
+        const circ = document.createElementNS(SVG_NS, 'circle');
+        circ.setAttribute('cx', pp.x-ox); circ.setAttribute('cy', pp.y-oy);
+        circ.setAttribute('r', 14);
+        circ.setAttribute('fill', 'rgba(230,80,40,0.35)');
+        circ.setAttribute('stroke', '#e2501f'); circ.setAttribute('stroke-width', '4');
+        svg.appendChild(circ);
+      }
+    });
+    addScaleBar(svg, center.lat, zoom);
+    inner.appendChild(svg);
+    frame.appendChild(inner);
+    col.appendChild(frame);
+    const cap = document.createElement('div');
+    cap.className = 'mini-cap';
+    cap.textContent = caption;
+    col.appendChild(cap);
+    container.appendChild(col);
+    return loads;
+  }
+
+  function showBusy(title){
+    el('busyTitle').textContent = title;
+    el('busyBar').style.width = '0%';
+    el('busyNum').textContent = '';
+    el('busy').classList.add('on');
+  }
+  function hideBusy(){ el('busy').classList.remove('on'); }
+  function waitLoaders(loaders){
+    if(!loaders.length) return Promise.resolve();
+    let done = 0;
+    const tick = () => {
+      done++;
+      el('busyBar').style.width = Math.round(done / loaders.length * 100) + '%';
+      el('busyNum').textContent = '地図の画像 ' + done + ' / ' + loaders.length;
+    };
+    const tracked = loaders.map(p => p.then(tick, tick));
+    return Promise.race([
+      Promise.all(tracked),
+      new Promise(res => setTimeout(res, 25000))   // 通信が遅くても待ち続けない
+    ]);
+  }
+
+  function buildSheets(targets){
+    const area = el('printArea');
+    area.innerHTML = '';
+    const loaders = [];
+    const total = targets.length;
+    targets.forEach((it, i) => {
+      const sel = it.entry;
+      const members = it.members;
+      const bounds = boundsOfMembers(members);
+      if(!bounds) return;
+      const center = bounds.getCenter();
+      const closeZoom = pickZoom(bounds);
+      const wideZoom = Math.max(13, closeZoom - 2);
+
+      const addr = members.map(m => extractAddress(m.props)).find(Boolean);
+      const chibanList = chibanListOf(members);
+      const chibanLine = [(sel.zone || '').trim(), chibanList.join('、')].filter(Boolean).join('　');
+      const areaText = fmtAreaFull(itemArea(it));
+
+      const sheet = document.createElement('div');
+      sheet.className = 'sheet';
+      const badgeText = sel.type === 'work' ? '作業農地' : '管理農地';
+      const badgeColor = sel.type === 'work' ? workColor : manageColor;
+
+      sheet.innerHTML = `
+        <div class="sheet-head">
+          <div class="sheet-head-main">
+            <span class="sheet-badge" style="border-color:${badgeColor};color:${badgeColor}">${badgeText}</span>
+            ${it.name ? '<h2>' + escapeHtml(it.name) + '</h2>' : ''}
+            ${sel.crop ? '<p class="crop-line">作物：' + escapeHtml(sel.crop) + '</p>' : ''}
+            ${sel.note ? '<p class="note">' + escapeHtml(sel.note) + '</p>' : ''}
+            <div class="info-block">
+              ${addr ? '<div class="info-line"><span class="info-label">住所</span>' + escapeHtml(addr.value) + '</div>' : ''}
+              ${chibanLine ? '<div class="info-line"><span class="info-label">地番</span>' + escapeHtml(chibanLine) + '</div>' : ''}
+              ${areaText ? '<div class="info-line"><span class="info-label">面積</span>' + escapeHtml(areaText)
+                 + (members.length > 1 ? '<span class="info-label" style="margin-left:12px">' + members.length + '筆</span>' : '') + '</div>' : ''}
+            </div>
+          </div>
+          <div class="mini-col sheet-qr">
+            <div class="qr-slot"></div>
+            <div class="mini-cap">QRでGoogleマップ</div>
+          </div>
+        </div>
+        <div class="sheet-grid">
+          <div class="slot-close"></div><div class="slot-wide"></div>
+          <div class="slot-road-close"></div><div class="slot-road-wide"></div>
+        </div>
+        <div class="gsi-credit">背景地図: 国土地理院（全国最新写真・標準地図）</div>
+        <div class="sheet-footer">
+          <span>作成日: ${new Date().toLocaleDateString('ja-JP')}</span>
+          <span>${i+1} / ${total}</span>
+        </div>
+      `;
+      area.appendChild(sheet);
+
+      loaders.push(...buildMiniMap(sheet.querySelector('.slot-close'), members, center, closeZoom, '航空写真（拡大）'));
+      loaders.push(...buildMiniMap(sheet.querySelector('.slot-wide'), members, center, wideZoom, '航空写真（周辺）'));
+      loaders.push(...buildMiniMap(sheet.querySelector('.slot-road-close'), members, center, closeZoom, '道路地図（拡大）', ROAD_TILE));
+      loaders.push(...buildMiniMap(sheet.querySelector('.slot-road-wide'), members, center, wideZoom, '道路地図（周辺）', ROAD_TILE));
+
+      // QRのライブラリが読めていなくても、印刷そのものは通す
+      const qrSlot = sheet.querySelector('.qr-slot');
+      const mapsUrl = 'https://www.google.com/maps/search/?api=1&query=' + center.lat.toFixed(6) + ',' + center.lng.toFixed(6);
+      if(typeof QRCode !== 'undefined'){
+        try{ new QRCode(qrSlot, {text: mapsUrl, width:110, height:110}); }
+        catch(e){ qrSlot.textContent = ''; logMsg('QRコードの生成に失敗: ' + e.message); }
+      } else {
+        qrSlot.style.cssText = 'width:110px;height:110px;border:1px dashed #bbb;';
+      }
+    });
+    return loaders;
+  }
+
+  let printing = false;
+  async function doPrint(){
+    if(printing) return;
+    const targets = printTargets();
+    if(!targets.length){ toast('印刷する圃場がありません。', 'err'); return; }
+    if(targets.length > 60 && !confirm(targets.length + '枚を印刷します。地図画像の読み込みに時間がかかります。続けますか？')) return;
+    printing = true;
+    showBusy('印刷の準備をしています（' + targets.length + '枚）');
+    try{
+      const loaders = buildSheets(targets);
+      await waitLoaders(loaders);
+      // 画面が裏に回っていても止まらないよう、rAFではなくタイマーで一拍おく
+      await new Promise(res => setTimeout(res, 60));
+      hideBusy();
+      window.print();
+    }catch(e){
+      hideBusy();
+      toast('印刷の準備に失敗しました: ' + e.message, 'err');
+    }finally{
+      printing = false;
+    }
+  }
+  el('printBtn').addEventListener('click', doPrint);
+
+  // ブラウザのメニューから直接印刷された場合に白紙を出さないための保険
+  window.addEventListener('beforeprint', () => {
+    const area = el('printArea');
+    if(!area.children.length){
+      area.innerHTML = '<div class="sheet"><div class="print-hint">'
+        + '圃場票がまだ作られていません。<br>画面右下の「印刷する」ボタンから印刷してください。'
+        + '<br>（ボタンを押すと、地図画像を読み込んでから印刷画面が開きます）</div></div>';
+    }
+  });
+
+  // ================================================================
+  //  ヘッダーのメニュー・使い方・キー操作
+  // ================================================================
+  function closeMenus(except){
+    document.querySelectorAll('.menu.on').forEach(m => { if(m !== except) m.classList.remove('on'); });
+  }
+  document.querySelectorAll('[data-menu]').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      const m = el(btn.dataset.menu);
+      const willOpen = !m.classList.contains('on');
+      closeMenus(m);
+      m.classList.toggle('on', willOpen);
+    });
+  });
+  document.querySelectorAll('.menu').forEach(m => m.addEventListener('click', e => e.stopPropagation()));
+  document.querySelectorAll('.menu-item').forEach(b => b.addEventListener('click', () => closeMenus(null)));
+  document.addEventListener('click', () => closeMenus(null));
+
+  el('logBtn').addEventListener('click', () => el('logPanel').classList.toggle('on'));
+
+  // ---------- 農地データの取り込み ----------
+  function impStatus(msg, kind){
+    const s = el('impStatus');
+    s.textContent = msg;
+    s.className = 'imp-status on' + (kind ? ' ' + kind : '');
+    try{ s.scrollIntoView({block:'nearest'}); }catch(e){}
+  }
+
+  // ---------- 筆ポリゴン公開データ（登録不要・ブラウザから直接） ----------
+  async function queryFudeBox(b){
+    const p = new URLSearchParams({
+      geometry: [b.w, b.s, b.e, b.n].join(','),
+      geometryType: 'esriGeometryEnvelope',
+      inSR: '4326', outSR: '4326',
+      spatialRel: 'esriSpatialRelIntersects',
+      outFields: FUDE_FIELDS,
+      returnGeometry: 'true',
+      f: 'geojson'
+    });
+    const res = await fetch(FUDE_QUERY + '?' + p.toString());
+    if(!res.ok) throw new Error('筆ポリゴンの取得に失敗しました（HTTP ' + res.status + '）。');
+    const d = await res.json();
+    if(d.error) throw new Error('筆ポリゴンの取得に失敗しました: ' + (d.error.message || (d.error.details || []).join(' ') || 'サーバーが要求を処理できませんでした'));
+    return {
+      features: d.features || [],
+      // 1000件で打ち切られた合図。範囲を4分割して取り直す
+      exceeded: !!(d.properties && d.properties.exceededTransferLimit)
+    };
+  }
+
+  // 先に件数だけ聞く（1回の通信で済む）。多すぎるときは取り込みに入らない。
+  async function countFudeBox(b){
+    const p = new URLSearchParams({
+      geometry: [b.w, b.s, b.e, b.n].join(','),
+      geometryType: 'esriGeometryEnvelope',
+      inSR: '4326',
+      spatialRel: 'esriSpatialRelIntersects',
+      returnCountOnly: 'true',
+      f: 'json'
+    });
+    const res = await fetch(FUDE_QUERY + '?' + p.toString());
+    if(!res.ok) throw new Error('筆ポリゴンの件数確認に失敗しました（HTTP ' + res.status + '）。');
+    const d = await res.json();
+    if(d.error) throw new Error('筆ポリゴンの件数確認に失敗しました: ' + (d.error.message || '範囲が広すぎる可能性があります'));
+    return Number(d.count || 0);
+  }
+
+  async function collectFude(bbox, code, onProgress){
+    const found = new Map();
+    const queue = [{b:bbox, depth:0}];
+    let requests = 0, cut = false;
+    while(queue.length){
+      if(found.size >= FUDE_MAX || requests >= FUDE_MAX_REQ){ cut = true; break; }
+      const job = queue.shift();
+      requests++;
+      const r = await queryFudeBox(job.b);
+      if(r.exceeded && job.depth < 7){
+        const mx = (job.b.w + job.b.e) / 2, my = (job.b.s + job.b.n) / 2;
+        const d = job.depth + 1;
+        queue.push({b:{w:job.b.w, s:job.b.s, e:mx, n:my}, depth:d});
+        queue.push({b:{w:mx, s:job.b.s, e:job.b.e, n:my}, depth:d});
+        queue.push({b:{w:job.b.w, s:my, e:mx, n:job.b.n}, depth:d});
+        queue.push({b:{w:mx, s:my, e:job.b.e, n:job.b.n}, depth:d});
+        onProgress(found.size, requests, queue.length);
+        continue;
+      }
+      for(const f of r.features){
+        if(!f || !f.geometry) continue;
+        const pr = f.properties || {};
+        if(code && pr.local_government_cd && pr.local_government_cd !== code) continue;
+        found.set(pr.polygon_uuid || ('o' + pr.OBJECTID), f);
+      }
+      onProgress(found.size, requests, queue.length);
+    }
+    return {features: Array.from(found.values()), requests, truncated: cut};
+  }
+
+  async function runFudeImport(){
+    const useCode = el('impUseCode').checked;
+    const code = (el('impLgCode').value || '').trim();
+    if(useCode && !/^\d{6}$/.test(code)){
+      impStatus('市町村コードは6桁で入れてください（四万十市=392103／高知市=392014）。絞り込みが不要ならチェックを外してください。', 'err');
+      return;
+    }
+    if(map.getZoom() < FUDE_MIN_ZOOM){
+      impStatus('範囲が広すぎます。取り込みたい場所を、もう少し拡大してからお試しください。', 'err');
+      return;
+    }
+    const b = map.getBounds();
+    const bbox = {w:b.getWest(), s:b.getSouth(), e:b.getEast(), n:b.getNorth()};
+    const btn = el('impFudeRun');
+    btn.disabled = true;
+    impStatus('この範囲の区画数を調べています…', 'busy');
+    try{
+      const n = await countFudeBox(bbox);
+      if(n === 0){
+        impStatus('この範囲には筆ポリゴンがありません。農地のある場所へ地図を動かしてお試しください。', 'err');
+        return;
+      }
+      if(n > FUDE_MAX){
+        impStatus('この範囲には約' + n.toLocaleString('ja-JP') + '区画あります（一度に取り込めるのは ' + FUDE_MAX.toLocaleString('ja-JP') + '件まで）。'
+          + 'もう少し拡大してから、必要な場所を何回かに分けて取り込んでください。', 'err');
+        return;
+      }
+      impStatus('約' + n.toLocaleString('ja-JP') + '区画を取得します…', 'busy');
+      const r = await collectFude(bbox, useCode ? code : null, (got, req, left) => {
+        impStatus('取得中… ' + got + '区画（通信 ' + req + '回' + (left ? '／残り ' + left + '区域' : '') + '）', 'busy');
+      });
+      if(!r.features.length){
+        impStatus('この範囲に筆ポリゴンが見つかりませんでした。'
+          + (useCode ? '市町村コードの絞り込みを外すか、地図を動かしてお試しください。' : '地図を動かしてお試しください。'), 'err');
+        return;
+      }
+      await ingestPayloads([{name:'筆ポリゴン公開データ', text: JSON.stringify({type:'FeatureCollection', features:r.features})}]);
+      impStatus(r.features.length + '区画を取り込みました（通信 ' + r.requests + '回）。'
+        + (r.truncated ? '※上限に達したため一部のみです。範囲を狭めて追加で取り込んでください。' : '')
+        + ' 地番を入れるには、eMAFFのピンJSONを重ねて読み込んでください。');
+    }catch(e){
+      impStatus(e.message || String(e), 'err');
+    }finally{
+      btn.disabled = false;
+    }
+  }
+  function openImport(){
+    el('importModal').classList.add('on');
+    el('impLgCode').focus();
+  }
+  function closeImport(){ el('importModal').classList.remove('on'); }
+
+  el('impFudeRun').addEventListener('click', runFudeImport);
+  el('impLgCode').addEventListener('keydown', e => { if(e.key === 'Enter') runFudeImport(); });
+  el('importBtn').addEventListener('click', openImport);
+  el('importClose').addEventListener('click', closeImport);
+  el('importModal').addEventListener('click', e => { if(e.target === el('importModal')) closeImport(); });
+
+  function openHelp(){
+    el('helpModal').classList.add('on');
+    try{ localStorage.setItem(HELP_KEY, '1'); }catch(e){}
+  }
+  function closeHelp(){ el('helpModal').classList.remove('on'); }
+  el('helpBtn').addEventListener('click', openHelp);
+  el('helpClose').addEventListener('click', closeHelp);
+  el('helpModal').addEventListener('click', e => { if(e.target === el('helpModal')) closeHelp(); });
+  const eh = el('emptyHelpBtn');
+  if(eh) eh.onclick = openHelp;
+
+  document.addEventListener('keydown', e => {
+    const t = e.target;
+    const typing = t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable);
+    const mod = e.ctrlKey || e.metaKey;
+
+    if(e.key === 'F1'){ e.preventDefault(); openHelp(); return; }
+    if(mod && e.key.toLowerCase() === 'p'){
+      // そのまま印刷すると白紙になるため、必ず準備してから印刷する
+      e.preventDefault();
+      doPrint();
+      return;
+    }
+    if(e.key === 'Escape'){
+      if(el('importModal').classList.contains('on')){ closeImport(); return; }
+      if(el('helpModal').classList.contains('on')){ closeHelp(); return; }
+      if(document.querySelector('.menu.on')){ closeMenus(null); return; }
+      if(mergeAnchorId){ clearMergeAnchor(true); toast('まとめ操作を解除しました。'); return; }
+    }
+    if(mod && !typing){
+      const k = e.key.toLowerCase();
+      if(k === 'z' && !e.shiftKey){ e.preventDefault(); doUndo(); return; }
+      if((k === 'z' && e.shiftKey) || k === 'y'){ e.preventDefault(); doRedo(); return; }
+    }
+    if(typing) return;
+    if(!hideMode) return;
+    if(e.key === 'Backspace' || e.key === 'Delete'){ e.preventDefault(); confirmHide(); }
+    else if(e.key === 'Escape'){ e.preventDefault(); setHideMode(false); }
+  });
+
+  // ================================================================
+  //  起動時
+  // ================================================================
+  (function init(){
+    renderHiddenStatus();
+    updateUndoRedoButtons();
+    renderList();
+
+    // 前回のデータがあれば知らせる（勝手に読み込まない）
+    let raw = null;
+    try{ raw = localStorage.getItem(STORE_KEY); }catch(e){}
+    if(raw){
+      try{
+        const o = JSON.parse(raw);
+        const n = (o.rawPolygons || []).length + (o.rawPins || []).length;
+        const sel = (o.selected || []).length;
+        const when = o.savedAt ? new Date(o.savedAt).toLocaleString('ja-JP') : '日時不明';
+        el('restoreInfo').textContent = '前回のデータが残っています（' + when + '／区画 ' + n + '件・選択 ' + sel + '件）';
+        el('restoreBar').classList.add('on');
+      }catch(e){ /* 壊れていれば黙って無視 */ }
+    }
+
+    let seen = null;
+    try{ seen = localStorage.getItem(HELP_KEY); }catch(e){}
+    if(!seen) openHelp();
+  })();
+})();
+</script>
+</body>
+</html>
